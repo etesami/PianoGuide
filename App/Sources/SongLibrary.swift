@@ -2,8 +2,15 @@ import Foundation
 import PianoCore
 
 /// The songs the user can pick: bundled samples plus `.mid` files imported from the Files app.
+/// Bundled samples in a subfolder of SampleSongs belong to that category (e.g. "Intermediate III").
 /// Imported files are copied into the app's Documents/Songs folder, so they stay after the original moves.
 final class SongLibrary: ObservableObject {
+    struct Category: Identifiable, Hashable {
+        let name: String
+        let songs: [Entry]
+        var id: String { name }
+    }
+
     struct Entry: Identifiable, Hashable {
         let url: URL
         let isSample: Bool
@@ -11,7 +18,9 @@ final class SongLibrary: ObservableObject {
         var name: String { url.deletingPathExtension().lastPathComponent }
     }
 
+    /// Samples outside any category folder.
     @Published private(set) var samples: [Entry] = []
+    @Published private(set) var categories: [Category] = []
     @Published private(set) var imported: [Entry] = []
 
     private let folder: URL
@@ -23,12 +32,24 @@ final class SongLibrary: ObservableObject {
     }
 
     func reload() {
-        samples = (Bundle.main.urls(forResourcesWithExtension: "mid", subdirectory: "SampleSongs") ?? [])
-            .map { Entry(url: $0, isSample: true) }
+        let samplesFolder = Bundle.main.resourceURL?.appending(path: "SampleSongs", directoryHint: .isDirectory)
+        samples = samplesFolder.map { Self.songs(in: $0, isSample: true) } ?? []
+        categories = (samplesFolder.flatMap { try? FileManager.default.contentsOfDirectory(
+                at: $0, includingPropertiesForKeys: [.isDirectoryKey]) } ?? [])
+            .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+            .map { Category(name: $0.lastPathComponent, songs: Self.songs(in: $0, isSample: true)) }
+            .filter { !$0.songs.isEmpty }
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-        imported = ((try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? [])
+        imported = Self.songs(in: folder, isSample: false)
+    }
+
+    /// All samples, in categories or not.
+    var allSamples: [Entry] { samples + categories.flatMap(\.songs) }
+
+    private static func songs(in folder: URL, isSample: Bool) -> [Entry] {
+        ((try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? [])
             .filter { ["mid", "midi"].contains($0.pathExtension.lowercased()) }
-            .map { Entry(url: $0, isSample: false) }
+            .map { Entry(url: $0, isSample: isSample) }
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 

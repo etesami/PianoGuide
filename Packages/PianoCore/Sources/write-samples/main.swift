@@ -15,6 +15,7 @@ let files: [(name: String, data: Data)] = testSongs
     : SampleSongs.all.map { ($0.name, MIDIFileWriter.write($0.song)) }
 for file in files {
     let url = dir.appendingPathComponent(file.name + ".mid")
+    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     try file.data.write(to: url)
     print("wrote \(url.path)")
 }

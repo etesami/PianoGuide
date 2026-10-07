@@ -2,7 +2,7 @@ import PianoCore
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Sheet listing the bundled samples and imported songs. Tap a song to practise it,
+/// Sheet listing the bundled samples (with category folders) and imported songs. Tap a song to practise it,
 /// swipe to delete an imported one, or import `.mid` files from the Files app.
 struct SongLibraryView: View {
     @ObservedObject var library: SongLibrary
@@ -16,6 +16,20 @@ struct SongLibraryView: View {
         NavigationStack {
             List {
                 Section("Samples") {
+                    ForEach(library.categories) { category in
+                        NavigationLink {
+                            List { ForEach(category.songs) { row($0) } }
+                                .navigationTitle(category.name)
+                        } label: {
+                            HStack {
+                                Label(category.name, systemImage: "folder")
+                                Spacer()
+                                if category.songs.contains(where: { $0 == current }) {
+                                    Image(systemName: "checkmark").foregroundColor(.accentColor)
+                                }
+                            }
+                        }
+                    }
                     ForEach(library.samples) { row($0) }
                 }
                 Section {

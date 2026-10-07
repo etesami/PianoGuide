@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-10-06 (session 7: song library, `.mid` import, test songs, finger numbers and position-shift songs)
+Last updated: 2026-10-07 (session 8: song categories; the C-F-D position songs are under "Intermediate III")
 
 ## Where we are
 
@@ -51,6 +51,13 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   F position avoids B♭ because the staff can't show flats yet. Seen in the simulator (bar starts, left-hand 5 under the bass
   staff, both hands together, D position with F#), using a temporary auto-play hook that was removed. 18 tests pass.
 
+- **Song categories** (session 8): bundled samples in a subfolder of `App/Resources/SampleSongs/` belong to that category,
+  and the Songs sheet shows each category as a folder row (tap to open its songs) above the loose samples ("twinkle").
+  The two C-F-D position songs are now in **Intermediate III** (path set in `SampleSongs.all`, e.g.
+  `"Intermediate III/Positions C-F-D (right hand)"`; `write-samples` creates the folder). Verified: 18 tests pass, the
+  `.app` contains `SampleSongs/Intermediate III/`, and the last song reopens from that folder in the simulator.
+  **Not verified:** tapping the folder in the sheet. Only Intermediate III exists so far; other levels not yet named.
+
 **Not yet verified:** running on the real iPad; in-app Bluetooth pairing; the Songs sheet and import picker by hand.
 
 ## Next steps (in order)
@@ -91,6 +98,7 @@ and team are already set up): connect the iPad, turn on Developer Mode, install 
 | 2026-10-06 | Hands in MIDI files: 2 or more note tracks means track 1 is the right hand and track 2 the left; a single track is split at middle C (60). |
 | 2026-10-06 | **Milestone 3 (piano roll) on hold**; song import done first (user's call). |
 | 2026-10-06 | Fingering in `.mid` files: a lyric meta event with a single digit 1–5 right before the note-on (same tick, same track). MusicXML (milestone 7) will be the proper source later. |
+| 2026-10-07 | Song categories (levels) for bundled samples = subfolders of SampleSongs; C-F-D positions go in "Intermediate III" (user's call). Imported songs stay flat in "My Songs". |
 | 2026-10-06 | Song library: imported `.mid` files are **copied** into the app (Documents/Songs), so they stay if the original moves; the file name is the song title; the last song opens on launch. No database: the folder is the library. |
 
 ## Known issues / caveats

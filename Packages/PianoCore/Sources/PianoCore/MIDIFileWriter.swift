@@ -74,11 +74,12 @@ public enum MIDIFileWriter {
 }
 
 public enum SampleSongs {
-    /// Bundled samples: file name (without `.mid`) → song. Written by `write-samples`.
+    /// Bundled samples: path under SampleSongs (without `.mid`) → song. Written by `write-samples`.
+    /// A folder in the path is the song's category in the app's Songs sheet.
     public static var all: [(name: String, song: Song)] {
         [("twinkle", twinkle),
-         ("Positions C-F-D (right hand)", positionsRightHand),
-         ("Positions C-F-D (both hands)", positionsBothHands)]
+         ("Intermediate III/Positions C-F-D (right hand)", positionsRightHand),
+         ("Intermediate III/Positions C-F-D (both hands)", positionsBothHands)]
     }
 
     /// "Twinkle Twinkle Little Star" opening, right-hand melody + simple left-hand notes, 100 BPM.

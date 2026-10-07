@@ -127,7 +127,7 @@ struct PracticeView: View {
             }
         }
         guard song == nil else { return }
-        let all = library.imported + library.samples
+        let all = library.imported + library.allSamples
         guard let entry = all.first(where: { $0.url.lastPathComponent == lastSong }) ?? library.samples.first else {
             loadError = "Sample song missing from app bundle"
             return
