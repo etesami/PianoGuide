@@ -2,6 +2,9 @@ import Foundation
 
 /// Parses Standard MIDI Files (format 0 and 1) into a `Song`.
 /// No dependencies on purpose: it is small and easy to test.
+///
+/// Fingering (our own convention, since MIDI has no standard for it): a lyric event whose text is a single
+/// digit 1–5, placed just before a note-on at the same tick in the same track, is that note's finger.
 public enum MIDIFileParser {
     public enum ParseError: Error, Equatable {
         case notAMIDIFile
@@ -36,7 +39,8 @@ public enum MIDIFileParser {
 
             var tick = 0
             var runningStatus: UInt8 = 0
-            var open: [Int: [(tick: Int, velocity: UInt8)]] = [:]   // key: channel<<8 | pitch
+            var open: [Int: [(tick: Int, velocity: UInt8, finger: Int?)]] = [:]   // key: channel<<8 | pitch
+            var pendingFinger: (tick: Int, finger: Int)?   // from a lyric "1"…"5", for the next note-on
             var notes: [RawNote] = []
 
             func close(_ key: Int, at tick: Int) {
@@ -44,7 +48,7 @@ public enum MIDIFileParser {
                 let start = starts.removeFirst()
                 open[key] = starts
                 notes.append(RawNote(pitch: UInt8(key & 0xFF), startTick: start.tick,
-                                     endTick: tick, velocity: start.velocity))
+                                     endTick: tick, velocity: start.velocity, finger: start.finger))
             }
 
             while !t.isAtEnd {
@@ -69,6 +73,10 @@ public enum MIDIFileParser {
                     case 0x58 where payload.count >= 2:
                         timeSignatures.append(TimeSignature(beat: beat, numerator: Int(payload[0]),
                                                             denominator: 1 << Int(payload[1])))
+                    case 0x05:
+                        if payload.count == 1, (UInt8(ascii: "1")...UInt8(ascii: "5")).contains(payload[0]) {
+                            pendingFinger = (tick, Int(payload[0] - UInt8(ascii: "0")))
+                        }
                     case 0x03 where trackName == nil:
                         trackName = String(bytes: payload, encoding: .utf8)
                     default:
@@ -85,7 +93,9 @@ public enum MIDIFileParser {
                         if velocity == 0 {
                             close(key, at: tick)
                         } else {
-                            open[key, default: []].append((tick, velocity))
+                            let finger = pendingFinger?.tick == tick ? pendingFinger?.finger : nil
+                            pendingFinger = nil
+                            open[key, default: []].append((tick, velocity, finger))
                         }
                     case 0x80:
                         let pitch = try t.uint8()
@@ -115,7 +125,7 @@ public enum MIDIFileParser {
                 return NoteEvent(id: index, pitch: raw.pitch,
                                  startBeat: Double(raw.startTick) / ticksPerQuarter,
                                  durationBeats: Double(raw.endTick - raw.startTick) / ticksPerQuarter,
-                                 velocity: raw.velocity, hand: hand)
+                                 velocity: raw.velocity, hand: hand, finger: raw.finger)
             }
 
         return Song(title: trackName ?? title, tempoMap: tempoMap,
@@ -138,6 +148,7 @@ public enum MIDIFileParser {
         var startTick: Int
         var endTick: Int
         var velocity: UInt8
+        var finger: Int?
     }
 }
 

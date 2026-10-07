@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-10-06 (session 7: song library and `.mid` import from the Files app)
+Last updated: 2026-10-06 (session 7: song library, `.mid` import, test songs, finger numbers and position-shift songs)
 
 ## Where we are
 
@@ -42,13 +42,22 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
 - **Test songs for import** (session 7): `TestSongs/Ode to Joy.mid` (two tracks, left-hand triads, dotted rhythm) and
   `TestSongs/Minuet in G.mid` (single track split at middle C, 3/4, eighths, F#, tempo change); see `TestSongs/README.md`.
   Generated from `PianoCore/TestSongs.swift`; the writer now also writes time signatures and single-track files.
-  Both load in the simulator with the right time signature, hands and step count. 16 tests pass.
+  Both load in the simulator with the right time signature, hands and step count.
+- **Finger numbers** (session 7): notes with a finger show it on the staff, above treble notes and below bass notes
+  (clear of stems; stacked for chords), in the note's color. In `.mid` files a finger is stored as a lyric event "1"–"5"
+  just before the note-on (our own convention; MIDI has no standard; the writer and parser both handle it).
+  New bundled samples for **practising C → F → D → C five-finger positions**: "Positions C-F-D (right hand)" and
+  "Positions C-F-D (both hands)" (16 bars each, 4/4, 90 BPM; the first note of each bar in each hand shows its finger).
+  F position avoids B♭ because the staff can't show flats yet. Seen in the simulator (bar starts, left-hand 5 under the bass
+  staff, both hands together, D position with F#), using a temporary auto-play hook that was removed. 18 tests pass.
 
 **Not yet verified:** running on the real iPad; in-app Bluetooth pairing; the Songs sheet and import picker by hand.
 
 ## Next steps (in order)
 
-1. User to try the Songs sheet and import the files in `TestSongs/` (or any downloaded `.mid`), and the staff view.
+1. User to try the position songs with the real piano (Catalyst build) and say whether the finger numbers are enough
+   (more notes? a toggle? position names like "F position" above the staff? finger numbers on the keyboard keys?).
+   Also try the Songs sheet and importing the files in `TestSongs/`.
 2. Import follow-ups, only if wanted: "Open in…" / AirDrop into the app (document types in `project.yml`), renaming songs,
    more bundled samples.
 3. Staff view gaps: rests, beams for eighths, dotted notes, flats/key signatures, neighbouring chord notes (seconds)
@@ -81,6 +90,7 @@ and team are already set up): connect the iPad, turn on Developer Mode, install 
 | 2026-10-06 | **Staff notation moved ahead of the piano roll** (user asked for sheet-music style like Simply Piano): grand staff that scrolls past a fixed cursor; MIDI notes are rounded to the nearest note value; black keys are spelled as sharps. |
 | 2026-10-06 | Hands in MIDI files: 2 or more note tracks means track 1 is the right hand and track 2 the left; a single track is split at middle C (60). |
 | 2026-10-06 | **Milestone 3 (piano roll) on hold**; song import done first (user's call). |
+| 2026-10-06 | Fingering in `.mid` files: a lyric meta event with a single digit 1–5 right before the note-on (same tick, same track). MusicXML (milestone 7) will be the proper source later. |
 | 2026-10-06 | Song library: imported `.mid` files are **copied** into the app (Documents/Songs), so they stay if the original moves; the file name is the song title; the last song opens on launch. No database: the folder is the library. |
 
 ## Known issues / caveats

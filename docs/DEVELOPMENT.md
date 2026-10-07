@@ -95,8 +95,9 @@ Bluetooth also works on the Mac: pair the piano in Audio MIDI Setup → MIDI Stu
 | Path | What |
 |---|---|
 | `Packages/PianoCore/Sources/PianoCore/Song.swift` | `Song`, `NoteEvent`, tempo map (`seconds(atBeat:)`), `NoteName` |
-| `…/MIDIFileParser.swift` | `.mid` → `Song` (format 0/1, running status, hand assignment) |
+| `…/MIDIFileParser.swift` | `.mid` → `Song` (format 0/1, running status, hand assignment, fingers from lyric events) |
 | `…/MIDIFileWriter.swift` | `Song` → `.mid` (format 1 per hand, or single-track format 0; tempo and time signatures), plus `SampleSongs` |
+| `…/PositionSongs.swift` | `FivePosition` (C/F/D finger → key) and the "Positions C-F-D" sample songs |
 | `…/TestSongs.swift` | Songs for trying the import ("Ode to Joy", "Minuet in G"); written to `TestSongs/` |
 | `…/WaitModeEngine.swift` | `PracticeSteps` (chord grouping) and the wait-mode state machine |
 | `…/StaffLayout.swift` | Staff positions (clef, line/space, sharps, ledger lines), `NoteValue`, bar lines |

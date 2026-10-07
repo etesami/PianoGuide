@@ -12,7 +12,7 @@ guard args.count == (testSongs ? 2 : 1) else {
 let dir = URL(fileURLWithPath: args.last!)
 let files: [(name: String, data: Data)] = testSongs
     ? TestSongs.all.map { ($0.name, MIDIFileWriter.write($0.song, singleTrack: $0.singleTrack)) }
-    : [("twinkle", MIDIFileWriter.write(SampleSongs.twinkle))]
+    : SampleSongs.all.map { ($0.name, MIDIFileWriter.write($0.song)) }
 for file in files {
     let url = dir.appendingPathComponent(file.name + ".mid")
     try file.data.write(to: url)

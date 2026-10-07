@@ -14,12 +14,43 @@ final class MIDIFileTests: XCTestCase {
         XCTAssertEqual(parsed.notes.last?.startBeat, 14)
     }
 
-    func testBundledSampleMatchesGenerator() throws {
-        // App/Resources/SampleSongs/twinkle.mid must be regenerated (scripts/check-core.sh --write-samples) after changing SampleSongs.
-        let url = URL(fileURLWithPath: #filePath)
+    func testBundledSamplesMatchGenerator() throws {
+        // App/Resources/SampleSongs/*.mid must be regenerated (scripts/check-core.sh --write-samples) after changing SampleSongs.
+        let dir = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("../../App/Resources/SampleSongs/twinkle.mid").standardized
-        XCTAssertEqual(try Data(contentsOf: url), MIDIFileWriter.write(SampleSongs.twinkle))
+            .appendingPathComponent("../../App/Resources/SampleSongs").standardized
+        for (name, song) in SampleSongs.all {
+            XCTAssertEqual(try Data(contentsOf: dir.appendingPathComponent(name + ".mid")), MIDIFileWriter.write(song), name)
+        }
+    }
+
+    func testFingersRoundTrip() throws {
+        // Two fingered notes in one chord, plus a note without a finger, in both file formats.
+        let song = Song(title: "Fingers", notes: [
+            NoteEvent(id: 0, pitch: 60, startBeat: 0, durationBeats: 1, velocity: 80, hand: .right, finger: 1),
+            NoteEvent(id: 1, pitch: 64, startBeat: 0, durationBeats: 1, velocity: 80, hand: .right, finger: 3),
+            NoteEvent(id: 2, pitch: 62, startBeat: 1, durationBeats: 1, velocity: 80, hand: .right),
+            NoteEvent(id: 3, pitch: 48, startBeat: 1, durationBeats: 1, velocity: 80, hand: .left, finger: 5),
+        ])
+        for singleTrack in [false, true] {
+            let parsed = try MIDIFileParser.parse(MIDIFileWriter.write(song, singleTrack: singleTrack))
+            XCTAssertEqual(parsed.notes.map(\.pitch), [60, 64, 48, 62])
+            XCTAssertEqual(parsed.notes.map(\.finger), [1, 3, 5, nil], "singleTrack: \(singleTrack)")
+        }
+    }
+
+    func testPositionSongs() {
+        XCTAssertEqual(FivePosition.d.pitch(finger: 3, hand: .right), 66, "F#4")
+        XCTAssertEqual(FivePosition.c.pitch(finger: 5, hand: .left), 48, "C3")
+        XCTAssertEqual(FivePosition.f.pitch(finger: 5, hand: .left), 41, "F2")
+        let song = SampleSongs.positionsRightHand
+        XCTAssertEqual(song.durationBeats, 63.8, accuracy: 0.001, "16 bars, ending on a whole note")
+        // Bar starts show fingers: C position starts on C4 with 1, F on F4 with 1, D on D4 with 1.
+        let fingered = song.notes.filter { $0.finger != nil }
+        XCTAssertEqual(fingered.count, 16)
+        XCTAssertEqual(fingered.filter { [0, 16, 32].contains($0.startBeat) }.map(\.pitch), [60, 65, 62])
+        XCTAssertFalse(song.notes.contains { $0.pitch == 70 }, "no B flat")
+        XCTAssertFalse(SampleSongs.positionsBothHands.notes.contains { $0.pitch % 12 == 10 }, "no B flat")
     }
 
     func testRunningStatusVelocityZeroAndSingleTrackHandSplit() throws {

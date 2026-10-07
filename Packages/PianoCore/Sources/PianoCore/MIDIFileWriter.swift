@@ -24,12 +24,18 @@ public enum MIDIFileWriter {
         for hands in handGroups {
             var events: [(tick: Int, bytes: [UInt8])] = singleTrack ? conductor : []
             for note in song.notes where hands.contains(note.hand) {
+                // Finger as a lyric just before the note-on (see MIDIFileParser).
+                if let finger = note.finger { events.append((ticks(note.startBeat), meta(0x05, Array("\(finger)".utf8)))) }
                 events.append((ticks(note.startBeat), [0x90, note.pitch, note.velocity]))
                 events.append((ticks(note.startBeat + note.durationBeats), [0x80, note.pitch, 0]))
             }
             // Note-offs before note-ons at the same tick, so repeated notes stay separate.
-            // Meta events (0xFF) go first at their tick. The sort is stable, so the conductor order is kept.
-            func order(_ e: (tick: Int, bytes: [UInt8])) -> Int { e.bytes[0] == 0xFF ? 0 : e.bytes[0] == 0x80 ? 1 : 2 }
+            // At each tick: conductor meta events, then note-offs, then note-ons, each finger lyric right before
+            // its note-on. The sort keeps the original order within a group.
+            func order(_ e: (tick: Int, bytes: [UInt8])) -> Int {
+                let isLyric = e.bytes[0] == 0xFF && e.bytes[1] == 0x05
+                return e.bytes[0] == 0xFF && !isLyric ? 0 : e.bytes[0] == 0x80 ? 1 : 2
+            }
             events = events.enumerated().sorted { ($0.element.tick, order($0.element), $0.offset) < ($1.element.tick, order($1.element), $1.offset) }.map(\.element)
             tracks.append(events)
         }
@@ -68,6 +74,13 @@ public enum MIDIFileWriter {
 }
 
 public enum SampleSongs {
+    /// Bundled samples: file name (without `.mid`) → song. Written by `write-samples`.
+    public static var all: [(name: String, song: Song)] {
+        [("twinkle", twinkle),
+         ("Positions C-F-D (right hand)", positionsRightHand),
+         ("Positions C-F-D (both hands)", positionsBothHands)]
+    }
+
     /// "Twinkle Twinkle Little Star" opening, right-hand melody + simple left-hand notes, 100 BPM.
     public static var twinkle: Song {
         let melody: [UInt8] = [60, 60, 67, 67, 69, 69, 67, 65, 65, 64, 64, 62, 62, 60]

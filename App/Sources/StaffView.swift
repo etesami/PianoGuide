@@ -3,7 +3,8 @@ import SwiftUI
 
 /// Grand staff (treble + bass) that scrolls the song past a fixed cursor, like sheet music.
 /// Played notes turn green, the next notes are blue (orange after a wrong note), and held wrong
-/// keys show as red note heads at the cursor.
+/// keys show as red note heads at the cursor. Finger numbers (when the song has them) sit above
+/// treble notes and below bass notes.
 /// `scrollBeat` (the beat under the cursor) is animatable, so changing it slides the music smoothly.
 struct StaffView: View, Animatable {
     var song: Song
@@ -114,6 +115,7 @@ struct StaffView: View, Animatable {
 
     private func drawNotes(_ context: inout GraphicsContext, _ m: Metrics) {
         let visibleBeats = Double((m.staffRight - m.musicStartX) / m.pxPerBeat)
+        var fingered: [FingerGroupKey: [(note: NoteEvent, color: Color)]] = [:]
         for note in song.notes {
             let x = x(atBeat: note.startBeat, m)
             guard x > m.musicStartX - m.sp * 3, note.startBeat < scrollBeat + visibleBeats + 1 else { continue }
@@ -126,6 +128,40 @@ struct StaffView: View, Animatable {
             }
             drawHead(&context, m, StaffLayout.place(note), x: x,
                      value: NoteValue.from(beats: note.durationBeats), color: color)
+            if note.finger != nil {
+                fingered[FingerGroupKey(clef: StaffLayout.clef(for: note), beat: note.startBeat), default: []]
+                    .append((note, color))
+            }
+        }
+        for (key, group) in fingered { drawFingers(&context, m, key, group) }
+    }
+
+    private struct FingerGroupKey: Hashable {
+        let clef: Clef
+        let beat: Double
+    }
+
+    /// Finger numbers for the notes of one chord (or a single note) on one staff: above the treble staff,
+    /// below the bass staff, clear of note heads and stems, stacked with the outermost note furthest out.
+    private func drawFingers(_ context: inout GraphicsContext, _ m: Metrics, _ key: FingerGroupKey,
+                             _ group: [(note: NoteEvent, color: Color)]) {
+        let above = key.clef == .treble
+        // The furthest-out point of any head or stem in this chord.
+        var edge = above ? m.y(.treble, position: 8) : m.bassBottom
+        for (note, _) in group {
+            let staff = StaffLayout.place(note)
+            let y = m.y(key.clef, position: staff.position)
+            let hasStem = NoteValue.from(beats: note.durationBeats).hasStem
+            let reach = hasStem && staff.stemUp == above ? m.sp * 3.5 : m.sp * 0.6
+            edge = above ? min(edge, y - reach) : max(edge, y + reach)
+        }
+        let sorted = group.sorted { above ? $0.note.pitch < $1.note.pitch : $0.note.pitch > $1.note.pitch }
+        let x = x(atBeat: key.beat, m)
+        for (i, item) in sorted.enumerated() {
+            guard let finger = item.note.finger else { continue }
+            let offset = m.sp * (1.3 + 1.6 * CGFloat(i))
+            context.draw(Text("\(finger)").font(.system(size: m.sp * 1.7, weight: .bold)).foregroundColor(item.color),
+                         at: CGPoint(x: x, y: above ? edge - offset : edge + offset))
         }
     }
 
