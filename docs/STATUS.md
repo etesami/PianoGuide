@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-10-06 (session 6: scrolling grand-staff view with a cursor and played/next note colors)
+Last updated: 2026-10-06 (session 7: song library and `.mid` import from the Files app)
 
 ## Where we are
 
@@ -33,15 +33,29 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   `PianoCore/StaffLayout.swift` (tested); drawing is `App/Sources/StaffView.swift` (a `Canvas`).
   Checked by temporarily auto-playing the first steps through `midi.simulate` (hook removed afterwards).
 
-**Not yet verified:** running on the real iPad; in-app Bluetooth pairing.
+- **Song library** (session 7): a "Songs" toolbar button (music-list icon) opens a sheet with the bundled samples and
+  "My Songs". **Import** opens the Files picker (`.mid`, several at once); each file is checked with the parser, then copied
+  into Documents/Songs (a name clash adds " 2"). Picking a single imported file opens it right away. Swipe to delete imported
+  songs. The title of an imported song is its file name. The last song is remembered (`@AppStorage("lastSong")`).
+  Verified in the simulator: a song copied into Documents/Songs loads on launch with the right title, steps and keyboard range.
+  **Not verified:** the sheet and the Files picker themselves (taps can't be done from the command line).
+- **Test songs for import** (session 7): `TestSongs/Ode to Joy.mid` (two tracks, left-hand triads, dotted rhythm) and
+  `TestSongs/Minuet in G.mid` (single track split at middle C, 3/4, eighths, F#, tempo change); see `TestSongs/README.md`.
+  Generated from `PianoCore/TestSongs.swift`; the writer now also writes time signatures and single-track files.
+  Both load in the simulator with the right time signature, hands and step count. 16 tests pass.
+
+**Not yet verified:** running on the real iPad; in-app Bluetooth pairing; the Songs sheet and import picker by hand.
 
 ## Next steps (in order)
 
-1. User to try the staff view (simulator taps or the real piano in the Catalyst build) and give feedback on looks.
-2. Staff view gaps: rests, beams for eighths, dotted notes, flats/key signatures, neighbouring chord notes (seconds)
+1. User to try the Songs sheet and import the files in `TestSongs/` (or any downloaded `.mid`), and the staff view.
+2. Import follow-ups, only if wanted: "Open in…" / AirDrop into the app (document types in `project.yml`), renaming songs,
+   more bundled samples.
+3. Staff view gaps: rests, beams for eighths, dotted notes, flats/key signatures, neighbouring chord notes (seconds)
    overlap, and the notes are spaced by time (not by engraving rules). Add only what the user asks for.
-3. Milestone 3: the horizontal piano roll (lower priority now that the staff exists), with play/pause and tempo.
-4. Milestone 2 polish: import `.mid` files from the Files app (`fileImporter`) and keep a song library.
+4. Milestone 3 (piano roll + running clock, play/pause, tempo): **on hold (user's call, 2026-10-06).** Open questions
+   when it resumes: horizontal roll vs falling notes (the keyboard strip is at the bottom), whether wait mode uses the
+   clock to glide between steps, and no scoring while the clock runs freely (that is milestone 5).
 5. Later: switch the app target to Swift 6 (`SWIFT_VERSION` in `project.yml`; core types are already `Sendable`).
 
 **On hold (user's call, 2026-10-06): real-iPad testing.** Don't ask about or plan around it until the user brings it back.
@@ -66,6 +80,8 @@ and team are already set up): connect the iPad, turn on Developer Mode, install 
 | 2026-10-06 | Key colors: green = correct, red = wrong (decided at press time), orange = needed keys after a mistake; no blue "next key" hint on the keyboard (user's choice). |
 | 2026-10-06 | **Staff notation moved ahead of the piano roll** (user asked for sheet-music style like Simply Piano): grand staff that scrolls past a fixed cursor; MIDI notes are rounded to the nearest note value; black keys are spelled as sharps. |
 | 2026-10-06 | Hands in MIDI files: 2 or more note tracks means track 1 is the right hand and track 2 the left; a single track is split at middle C (60). |
+| 2026-10-06 | **Milestone 3 (piano roll) on hold**; song import done first (user's call). |
+| 2026-10-06 | Song library: imported `.mid` files are **copied** into the app (Documents/Songs), so they stay if the original moves; the file name is the song title; the last song opens on launch. No database: the folder is the library. |
 
 ## Known issues / caveats
 

@@ -10,11 +10,12 @@
 ```sh
 scripts/check-core.sh                                   # = (cd Packages/PianoCore && swift test)
 scripts/check-core.sh --write-samples App/Resources/SampleSongs   # regenerate sample .mid files
+scripts/check-core.sh --write-test-songs TestSongs                # regenerate the import test songs
 ```
 
 The package uses `swift-tools-version:6.0`, so `PianoCore` builds in Swift 6 language mode (strict concurrency).
 Add tests in `Packages/PianoCore/Tests/PianoCoreTests/` (XCTest). A test checks that the bundled `twinkle.mid`
-matches `SampleSongs.twinkle`, so regenerate it after changing the sample song.
+matches `SampleSongs.twinkle`, so regenerate it after changing the sample song; likewise `TestSongs/*.mid` must match `TestSongs`.
 
 ## Generate & run the app
 
@@ -24,6 +25,17 @@ open PianoGuide.xcodeproj
 ```
 
 Choose an iPad simulator and press Run (⌘R). In the simulator, tap the on-screen keys to play.
+
+To put a test song in the simulator's library without the file picker, copy it into the app's container and
+set the last song in the app's own preferences file (`simctl spawn … defaults write` writes elsewhere and has no effect):
+
+```sh
+C=$(xcrun simctl get_app_container $SIM com.esnetsm.pianoguide data)
+cp song.mid "$C/Documents/Songs/"
+plutil -replace lastSong -string song.mid "$C/Library/Preferences/com.esnetsm.pianoguide.plist"   # app not running
+```
+
+If screenshots stop changing (the status-bar clock is stuck), the simulator display has frozen: `xcrun simctl shutdown $SIM` and boot it again.
 
 From the command line (this is how it was verified):
 
@@ -84,12 +96,15 @@ Bluetooth also works on the Mac: pair the piano in Audio MIDI Setup → MIDI Stu
 |---|---|
 | `Packages/PianoCore/Sources/PianoCore/Song.swift` | `Song`, `NoteEvent`, tempo map (`seconds(atBeat:)`), `NoteName` |
 | `…/MIDIFileParser.swift` | `.mid` → `Song` (format 0/1, running status, hand assignment) |
-| `…/MIDIFileWriter.swift` | `Song` → `.mid`, plus `SampleSongs` |
+| `…/MIDIFileWriter.swift` | `Song` → `.mid` (format 1 per hand, or single-track format 0; tempo and time signatures), plus `SampleSongs` |
+| `…/TestSongs.swift` | Songs for trying the import ("Ode to Joy", "Minuet in G"); written to `TestSongs/` |
 | `…/WaitModeEngine.swift` | `PracticeSteps` (chord grouping) and the wait-mode state machine |
 | `…/StaffLayout.swift` | Staff positions (clef, line/space, sharps, ledger lines), `NoteValue`, bar lines |
 | `App/Sources/MIDIInputService.swift` | CoreMIDI: connects all sources and publishes note on/off (also simulated events) |
 | `App/Sources/BluetoothMIDIPairingView.swift` | Wraps `CABTMIDICentralViewController` |
-| `App/Sources/PracticeView.swift` | Main screen: wait mode on the sample song (staff + keyboard) |
+| `App/Sources/PracticeView.swift` | Main screen: wait mode on the chosen song (staff + keyboard); remembers the last song |
+| `App/Sources/SongLibrary.swift` | Bundled samples + imported `.mid` files (copied to Documents/Songs); import, delete, load |
+| `App/Sources/SongLibraryView.swift` | "Songs" sheet: pick a song, swipe to delete, Import button (`fileImporter`) |
 | `App/Sources/StaffView.swift` | Grand staff drawn in a `Canvas`, scrolling past the cursor (`scrollBeat` is animatable) |
 | `App/Sources/KeyboardView.swift` | On-screen piano that can be tapped; note-name labels and key colors |
 

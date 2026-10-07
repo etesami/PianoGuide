@@ -1,9 +1,10 @@
 import Foundation
 
-/// Minimal Standard MIDI File writer (format 1, one track per hand).
-/// Used to build test fixtures and the bundled sample songs.
+/// Minimal Standard MIDI File writer: format 1 with one track per hand, or format 0 (`singleTrack`),
+/// where everything is in one track and a reader has to guess the hands.
+/// Used to build test fixtures, the bundled sample songs and the test songs.
 public enum MIDIFileWriter {
-    public static func write(_ song: Song, ticksPerQuarter: Int = 480) -> Data {
+    public static func write(_ song: Song, ticksPerQuarter: Int = 480, singleTrack: Bool = false) -> Data {
         func ticks(_ beat: Double) -> Int { Int((beat * Double(ticksPerQuarter)).rounded()) }
 
         // Track 0: conductor (title, tempo). Then right hand, left hand.
@@ -12,19 +13,28 @@ public enum MIDIFileWriter {
             let us = tempo.microsecondsPerQuarter
             conductor.append((ticks(tempo.beat), meta(0x51, [UInt8(us >> 16 & 0xFF), UInt8(us >> 8 & 0xFF), UInt8(us & 0xFF)])))
         }
-        var tracks = [conductor]
-        for hands in [[Hand.right, .unknown], [.left]] {
-            var events: [(tick: Int, bytes: [UInt8])] = []
+        for sig in song.timeSignatures {
+            // Denominator is stored as a power of two; 24 clocks per click, 8 32nds per quarter.
+            let power = UInt8(sig.denominator.trailingZeroBitCount)
+            conductor.append((ticks(sig.beat), meta(0x58, [UInt8(sig.numerator), power, 24, 8])))
+        }
+        conductor.sort { $0.tick < $1.tick }
+        var tracks = singleTrack ? [] : [conductor]
+        let handGroups: [[Hand]] = singleTrack ? [[.right, .unknown, .left]] : [[.right, .unknown], [.left]]
+        for hands in handGroups {
+            var events: [(tick: Int, bytes: [UInt8])] = singleTrack ? conductor : []
             for note in song.notes where hands.contains(note.hand) {
                 events.append((ticks(note.startBeat), [0x90, note.pitch, note.velocity]))
                 events.append((ticks(note.startBeat + note.durationBeats), [0x80, note.pitch, 0]))
             }
             // Note-offs before note-ons at the same tick, so repeated notes stay separate.
-            events.sort { ($0.tick, $0.bytes[0] == 0x80 ? 0 : 1) < ($1.tick, $1.bytes[0] == 0x80 ? 0 : 1) }
+            // Meta events (0xFF) go first at their tick. The sort is stable, so the conductor order is kept.
+            func order(_ e: (tick: Int, bytes: [UInt8])) -> Int { e.bytes[0] == 0xFF ? 0 : e.bytes[0] == 0x80 ? 1 : 2 }
+            events = events.enumerated().sorted { ($0.element.tick, order($0.element), $0.offset) < ($1.element.tick, order($1.element), $1.offset) }.map(\.element)
             tracks.append(events)
         }
 
-        var out = Array("MThd".utf8) + be32(6) + be16(1) + be16(tracks.count) + be16(ticksPerQuarter)
+        var out = Array("MThd".utf8) + be32(6) + be16(singleTrack ? 0 : 1) + be16(tracks.count) + be16(ticksPerQuarter)
         for events in tracks {
             var body: [UInt8] = []
             var last = 0

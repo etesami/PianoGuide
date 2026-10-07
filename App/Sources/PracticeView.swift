@@ -1,10 +1,15 @@
 import PianoCore
 import SwiftUI
 
-/// First playable screen: wait mode on the bundled sample song, shown on a scrolling grand staff.
+/// Main screen: wait mode on the chosen song (a bundled sample or an imported .mid), shown on a scrolling grand staff.
 struct PracticeView: View {
     @EnvironmentObject private var midi: MIDIInputService
+    @StateObject private var library = SongLibrary()
     @State private var song: Song?
+    @State private var songEntry: SongLibrary.Entry?
+    @State private var showLibrary = false
+    /// The last song picked, as a file name ("twinkle.mid"); imported songs are looked up first.
+    @AppStorage("lastSong") private var lastSong = ""
     @State private var engine = WaitModeEngine(steps: [])
     @State private var loadError: String?
     @State private var showPairing = false
@@ -33,6 +38,9 @@ struct PracticeView: View {
             .navigationTitle(song?.title ?? "PianoGuide")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
+                    Button { showLibrary = true } label: { Label("Songs", systemImage: "music.note.list") }
+                }
+                ToolbarItem(placement: .topBarLeading) {
                     Button("Restart") { releaseLatched(); engine.reset() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -47,6 +55,9 @@ struct PracticeView: View {
             }
             .sheet(isPresented: $showPairing, onDismiss: midi.connectAllSources) {
                 BluetoothMIDIPairingView()
+            }
+            .sheet(isPresented: $showLibrary) {
+                SongLibraryView(library: library, current: songEntry, onPick: open)
             }
         }
         .onAppear(perform: load)
@@ -116,16 +127,25 @@ struct PracticeView: View {
             }
         }
         guard song == nil else { return }
+        let all = library.imported + library.samples
+        guard let entry = all.first(where: { $0.url.lastPathComponent == lastSong }) ?? library.samples.first else {
+            loadError = "Sample song missing from app bundle"
+            return
+        }
+        open(entry)
+    }
+
+    private func open(_ entry: SongLibrary.Entry) {
         do {
-            guard let url = Bundle.main.url(forResource: "twinkle", withExtension: "mid", subdirectory: "SampleSongs") else {
-                loadError = "Sample song missing from app bundle"
-                return
-            }
-            let loaded = try MIDIFileParser.parse(Data(contentsOf: url), title: "Twinkle Twinkle")
+            let loaded = try library.load(entry)
+            releaseLatched()
             song = loaded
+            songEntry = entry
             engine = WaitModeEngine(steps: PracticeSteps.make(from: loaded.notes))
+            loadError = nil
+            lastSong = entry.url.lastPathComponent
         } catch {
-            loadError = "Could not load song: \(error)"
+            loadError = "Could not load \(entry.name): " + SongLibraryView.describe(error)
         }
     }
 }

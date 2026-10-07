@@ -42,6 +42,25 @@ final class MIDIFileTests: XCTestCase {
         XCTAssertEqual(song.notes.map(\.hand), [.right, .left], "split at middle C")
     }
 
+    func testTestSongsMatchGeneratorAndParseBack() throws {
+        // TestSongs/*.mid must be regenerated (scripts/check-core.sh --write-test-songs TestSongs) after changing TestSongs.
+        let dir = URL(fileURLWithPath: #filePath).appendingPathComponent("../../../../../TestSongs").standardized
+        for (name, song, singleTrack) in TestSongs.all {
+            let data = MIDIFileWriter.write(song, singleTrack: singleTrack)
+            XCTAssertEqual(try Data(contentsOf: dir.appendingPathComponent(name + ".mid")), data, name)
+            let parsed = try MIDIFileParser.parse(data)
+            XCTAssertEqual(parsed.title, song.title)
+            XCTAssertEqual(parsed.timeSignatures, song.timeSignatures, name)
+            XCTAssertEqual(parsed.tempoMap, song.tempoMap, name)
+            XCTAssertEqual(parsed.notes.map(\.pitch), song.notes.map(\.pitch), name)
+            XCTAssertEqual(parsed.notes.map(\.startBeat), song.notes.map(\.startBeat), name)
+            // Two tracks give the hands directly; the single-track file is split at middle C, which matches here too.
+            XCTAssertEqual(parsed.notes.map(\.hand), song.notes.map(\.hand), name)
+        }
+        XCTAssertEqual(TestSongs.minuetInG.timeSignatures.first?.numerator, 3)
+        XCTAssertEqual(PracticeSteps.make(from: TestSongs.odeToJoy.notes).first?.pitches.count, 4, "C3+E3+G3 with E4")
+    }
+
     func testRejectsGarbage() {
         XCTAssertThrowsError(try MIDIFileParser.parse(Data("hello world".utf8))) { error in
             XCTAssertEqual(error as? MIDIFileParser.ParseError, .notAMIDIFile)
