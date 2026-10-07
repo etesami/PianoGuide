@@ -1,0 +1,134 @@
+import XCTest
+@testable import PianoCore
+
+final class MIDIFileTests: XCTestCase {
+    func testRoundTripSampleSong() throws {
+        let original = SampleSongs.twinkle
+        let parsed = try MIDIFileParser.parse(MIDIFileWriter.write(original))
+        XCTAssertEqual(parsed.title, "Twinkle Twinkle")
+        XCTAssertEqual(parsed.notes.count, original.notes.count)
+        XCTAssertEqual(parsed.notes.map(\.pitch), original.notes.map(\.pitch))
+        XCTAssertEqual(parsed.notes.map(\.hand), original.notes.map(\.hand), "hands from tracks")
+        XCTAssertEqual(parsed.tempoMap[0].bpm, 100, accuracy: 0.01)
+        XCTAssertEqual(parsed.notes.first?.startBeat, 0)
+        XCTAssertEqual(parsed.notes.last?.startBeat, 14)
+    }
+
+    func testBundledSampleMatchesGenerator() throws {
+        // App/Resources/SampleSongs/twinkle.mid must be regenerated (scripts/check-core.sh --write-samples) after changing SampleSongs.
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("../../App/Resources/SampleSongs/twinkle.mid").standardized
+        XCTAssertEqual(try Data(contentsOf: url), MIDIFileWriter.write(SampleSongs.twinkle))
+    }
+
+    func testRunningStatusVelocityZeroAndSingleTrackHandSplit() throws {
+        // Format 0, 96 ticks per quarter; C4 then G3 using running status.
+        let track: [UInt8] = [
+            0x00, 0x90, 60, 100,   // note on C4
+            0x60, 60, 0,           // running status, vel 0 = off after 1 beat
+            0x00, 55, 90,          // G3 on
+            0x60, 55, 0,           // G3 off
+            0x00, 0xFF, 0x2F, 0x00,
+        ]
+        var bytes = Array("MThd".utf8) + [0, 0, 0, 6, 0, 0, 0, 1, 0, 96]
+        bytes += Array("MTrk".utf8) + [0, 0, 0, UInt8(track.count)] + track
+        let song = try MIDIFileParser.parse(Data(bytes))
+        XCTAssertEqual(song.notes.count, 2)
+        XCTAssertEqual(song.notes[0].pitch, 60)
+        XCTAssertEqual(song.notes[0].durationBeats, 1)
+        XCTAssertEqual(song.notes[1].pitch, 55)
+        XCTAssertEqual(song.notes[1].startBeat, 1)
+        XCTAssertEqual(song.notes.map(\.hand), [.right, .left], "split at middle C")
+    }
+
+    func testRejectsGarbage() {
+        XCTAssertThrowsError(try MIDIFileParser.parse(Data("hello world".utf8))) { error in
+            XCTAssertEqual(error as? MIDIFileParser.ParseError, .notAMIDIFile)
+        }
+    }
+}
+
+final class SongTests: XCTestCase {
+    func testTempoMapBeatsToSeconds() {
+        let song = Song(title: "t", tempoMap: [TempoChange(beat: 0, microsecondsPerQuarter: 500_000),
+                                                TempoChange(beat: 4, microsecondsPerQuarter: 1_000_000)], notes: [])
+        XCTAssertEqual(song.seconds(atBeat: 2), 1.0, "2 beats at 120 BPM")
+        XCTAssertEqual(song.seconds(atBeat: 4), 2.0)
+        XCTAssertEqual(song.seconds(atBeat: 6), 4.0, "then 2 beats at 60 BPM")
+        XCTAssertEqual(Song(title: "d", notes: []).seconds(atBeat: 1), 0.5, "default 120 BPM")
+    }
+
+    func testNoteNames() {
+        XCTAssertEqual(NoteName.of(60), "C4")
+        XCTAssertEqual(NoteName.of(21), "A0")
+        XCTAssertEqual(NoteName.of(61), "C#4")
+        XCTAssertTrue(NoteName.isBlackKey(61))
+        XCTAssertFalse(NoteName.isBlackKey(60))
+    }
+}
+
+final class WaitModeTests: XCTestCase {
+    func testPracticeStepsGroupChords() {
+        let notes = [
+            NoteEvent(id: 0, pitch: 60, startBeat: 0, durationBeats: 1, velocity: 80, hand: .right),
+            NoteEvent(id: 1, pitch: 64, startBeat: 0.01, durationBeats: 1, velocity: 80, hand: .right),
+            NoteEvent(id: 2, pitch: 48, startBeat: 0, durationBeats: 1, velocity: 80, hand: .left),
+            NoteEvent(id: 3, pitch: 62, startBeat: 1, durationBeats: 1, velocity: 80, hand: .right),
+        ]
+        let all = PracticeSteps.make(from: notes)
+        XCTAssertEqual(all.count, 2)
+        XCTAssertEqual(all[0].pitches, [60, 64, 48], "first step is a 3-note chord")
+        XCTAssertEqual(PracticeSteps.make(from: notes, hands: [.right])[0].pitches, [60, 64], "hand filter")
+    }
+
+    func testEngine() {
+        let notes = [
+            NoteEvent(id: 0, pitch: 60, startBeat: 0, durationBeats: 1, velocity: 80),
+            NoteEvent(id: 1, pitch: 64, startBeat: 0, durationBeats: 1, velocity: 80),
+            NoteEvent(id: 2, pitch: 67, startBeat: 1, durationBeats: 1, velocity: 80),
+        ]
+        var engine = WaitModeEngine(steps: PracticeSteps.make(from: notes))
+        XCTAssertEqual(engine.noteOn(62), .wrong(pitch: 62))
+        XCTAssertEqual(engine.noteOn(60), .correct(pitch: 60), "half the chord")
+        XCTAssertEqual(engine.currentIndex, 0, "still waiting on chord")
+        XCTAssertEqual(engine.noteOn(64), .stepCompleted(index: 0))
+        XCTAssertEqual(engine.noteOn(67), .stepCompleted(index: 1))
+        XCTAssertTrue(engine.isFinished)
+        XCTAssertEqual(engine.noteOn(60), .finished)
+        XCTAssertEqual(engine.wrongCount, 1)
+    }
+
+    func testReleasedChordNoteMustBePressedAgain() {
+        let notes = [
+            NoteEvent(id: 0, pitch: 60, startBeat: 0, durationBeats: 1, velocity: 80),
+            NoteEvent(id: 1, pitch: 64, startBeat: 0, durationBeats: 1, velocity: 80),
+        ]
+        var engine = WaitModeEngine(steps: PracticeSteps.make(from: notes))
+        _ = engine.noteOn(60)
+        engine.noteOff(60)
+        XCTAssertEqual(engine.noteOn(64), .correct(pitch: 64))
+        XCTAssertEqual(engine.currentIndex, 0)
+    }
+
+    func testKeyStatesKeepVerdictFromPressTime() {
+        let notes = [
+            NoteEvent(id: 0, pitch: 60, startBeat: 0, durationBeats: 1, velocity: 80),
+            NoteEvent(id: 1, pitch: 64, startBeat: 0, durationBeats: 1, velocity: 80),
+            NoteEvent(id: 2, pitch: 67, startBeat: 1, durationBeats: 1, velocity: 80),
+        ]
+        var engine = WaitModeEngine(steps: PracticeSteps.make(from: notes))
+        XCTAssertEqual(engine.keyStates, [:], "no hints before a mistake")
+        _ = engine.noteOn(60)
+        XCTAssertEqual(engine.keyStates, [60: .correct])
+        _ = engine.noteOn(62)
+        XCTAssertEqual(engine.keyStates, [60: .correct, 62: .wrong, 64: .missed], "wrong note shows the missing key")
+        engine.noteOff(62)
+        XCTAssertEqual(engine.keyStates, [60: .correct, 64: .missed], "hint stays after releasing the wrong key")
+        _ = engine.noteOn(64)
+        XCTAssertEqual(engine.keyStates, [60: .correct, 64: .correct], "held keys stay green after the step moves on")
+        engine.noteOff(60)
+        engine.noteOff(64)
+        XCTAssertEqual(engine.keyStates, [:])
+    }
+}

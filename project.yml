@@ -1,0 +1,43 @@
+# XcodeGen spec. Generate the Xcode project with:  xcodegen generate
+# (PianoGuide.xcodeproj is generated and git-ignored.)
+name: PianoGuide
+options:
+  bundleIdPrefix: com.esnetsm
+  deploymentTarget:
+    iOS: "17.0"
+packages:
+  PianoCore:
+    path: Packages/PianoCore
+settings:
+  base:
+    SWIFT_VERSION: "5.0"                 # Swift 6 strict concurrency later
+    DEVELOPMENT_TEAM: YC58PFGW9Q         # Ehsan Etesami (Personal Team), free Apple ID
+targets:
+  PianoGuide:
+    type: application
+    platform: iOS
+    sources:
+      - App/Sources
+      - path: App/Resources/SampleSongs
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: PianoCore
+      - sdk: CoreMIDI.framework
+      - sdk: CoreAudioKit.framework
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: "2,6"    # iPad + Mac Catalyst
+        SUPPORTS_MACCATALYST: YES        # lets the Intel dev Mac run the app with the USB/Bluetooth piano
+        PRODUCT_BUNDLE_IDENTIFIER: com.esnetsm.pianoguide
+        CODE_SIGN_STYLE: Automatic
+        # Mac Catalyst: sign to run locally, so it builds without an Apple ID / team.
+        "CODE_SIGN_STYLE[sdk=macosx*]": Manual
+        "CODE_SIGN_IDENTITY[sdk=macosx*]": "-"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: "PianoGuide uses Bluetooth to connect to your MIDI keyboard."
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown"
+        INFOPLIST_KEY_CFBundleDisplayName: PianoGuide
+        MARKETING_VERSION: "0.0.1"
+        CURRENT_PROJECT_VERSION: "1"
