@@ -2,16 +2,16 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-10-06 (session 5: key labels and new key colors, verified with the real piano)
+Last updated: 2026-10-06 (session 6: scrolling grand-staff view with a cursor and played/next note colors)
 
 ## Where we are
 
-Milestones 0–2 and 4 are partly done (see the table in [PLAN.md §8](../PLAN.md#8-milestones)).
+Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.md §8](../PLAN.md#8-milestones)).
 
 **Verified:**
 - `PianoCore` package: the `Song` model, a Standard MIDI File parser and writer, `PracticeSteps` (groups chords),
   `WaitModeEngine`, and the sample song "Twinkle Twinkle" (`App/Resources/SampleSongs/twinkle.mid`).
-  10 XCTest tests pass with `scripts/check-core.sh` (`swift test`); the package is in Swift 6 language mode (session 4).
+  15 XCTest tests pass with `scripts/check-core.sh` (`swift test`); the package is in Swift 6 language mode (session 4).
 - **The app builds with Xcode 26.3 (Swift 6.2, iOS 26.2 SDK) and runs in the iPad Pro 11" simulator** (2026-10-06):
   title, connection hint, step strip (C3+C4, C4, G4, …) and the keyboard (C2–C5). Tapping keys can't be done from the command line.
 - **FP-30X connected to the Mac by USB-C**: macOS sees it as MIDI source "Roland Digital Piano" (2026-10-06).
@@ -25,14 +25,24 @@ Milestones 0–2 and 4 are partly done (see the table in [PLAN.md §8](../PLAN.m
 - **Key colors** (session 5, confirmed by the user on the real piano): a key is green if it was correct when pressed,
   red if wrong, and keeps that color until released (even after the step moves on). After a wrong note, the keys
   still needed for the step turn orange until the step is done. No blue hint on the keyboard. Logic: `WaitModeEngine.keyStates`.
+- **Staff view** (session 6, seen in simulator screenshots; not yet tried by the user): the song is drawn on a grand staff
+  (treble = right hand, bass = left hand) with clefs, time signature, bar lines, note heads (whole/half/quarter/eighth/16th),
+  stems, flags, sharps and ledger lines. A blue cursor sits just before the next notes and the music slides left
+  (animated) when a step is done. Colors: played = green, next = blue, still needed after a wrong note = orange,
+  held wrong keys = red heads at the cursor. It replaces the old text strip of steps. Layout math is in
+  `PianoCore/StaffLayout.swift` (tested); drawing is `App/Sources/StaffView.swift` (a `Canvas`).
+  Checked by temporarily auto-playing the first steps through `midi.simulate` (hook removed afterwards).
 
 **Not yet verified:** running on the real iPad; in-app Bluetooth pairing.
 
 ## Next steps (in order)
 
-1. Milestone 3: build the **horizontal piano roll** view (a `Canvas` with notes moving right to left past a playhead), with play/pause and tempo.
-2. Milestone 2 polish: import `.mid` files from the Files app (`fileImporter`) and keep a song library.
-3. Later: switch the app target to Swift 6 (`SWIFT_VERSION` in `project.yml`; core types are already `Sendable`).
+1. User to try the staff view (simulator taps or the real piano in the Catalyst build) and give feedback on looks.
+2. Staff view gaps: rests, beams for eighths, dotted notes, flats/key signatures, neighbouring chord notes (seconds)
+   overlap, and the notes are spaced by time (not by engraving rules). Add only what the user asks for.
+3. Milestone 3: the horizontal piano roll (lower priority now that the staff exists), with play/pause and tempo.
+4. Milestone 2 polish: import `.mid` files from the Files app (`fileImporter`) and keep a song library.
+5. Later: switch the app target to Swift 6 (`SWIFT_VERSION` in `project.yml`; core types are already `Sendable`).
 
 **On hold (user's call, 2026-10-06): real-iPad testing.** Don't ask about or plan around it until the user brings it back.
 Test in the simulator (on-screen keys) and the Mac Catalyst build (real piano) instead. When it resumes (the Apple ID
@@ -54,6 +64,7 @@ and team are already set up): connect the iPad, turn on Developer Mode, install 
 | 2026-10-06 | Apple ID added; `DEVELOPMENT_TEAM: YC58PFGW9Q` (personal team) is in `project.yml`. Mac Catalyst builds sign to run locally ("-"), so choosing "My Mac" in Xcode works. |
 | 2026-10-06 | Core tests use XCTest (`swift test`); `PianoCore` uses swift-tools 6.0 / Swift 6 mode, iOS 17+ / macOS 14+. The old plain-`swiftc` check runner was removed. |
 | 2026-10-06 | Key colors: green = correct, red = wrong (decided at press time), orange = needed keys after a mistake; no blue "next key" hint on the keyboard (user's choice). |
+| 2026-10-06 | **Staff notation moved ahead of the piano roll** (user asked for sheet-music style like Simply Piano): grand staff that scrolls past a fixed cursor; MIDI notes are rounded to the nearest note value; black keys are spelled as sharps. |
 | 2026-10-06 | Hands in MIDI files: 2 or more note tracks means track 1 is the right hand and track 2 the left; a single track is split at middle C (60). |
 
 ## Known issues / caveats

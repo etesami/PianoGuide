@@ -1,8 +1,7 @@
 import PianoCore
 import SwiftUI
 
-/// First playable screen: wait mode on the bundled sample song.
-/// Upcoming steps are shown as text for now; falling notes come in milestone 3.
+/// First playable screen: wait mode on the bundled sample song, shown on a scrolling grand staff.
 struct PracticeView: View {
     @EnvironmentObject private var midi: MIDIInputService
     @State private var song: Song?
@@ -19,7 +18,7 @@ struct PracticeView: View {
         NavigationStack {
             VStack(spacing: 16) {
                 header
-                upcomingSteps
+                staff
                 Spacer()
                 KeyboardView(range: keyboardRange,
                              states: engine.keyStates,
@@ -67,18 +66,14 @@ struct PracticeView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var upcomingSteps: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 12) {
-                ForEach(Array(engine.steps.enumerated()), id: \.offset) { index, step in
-                    Text(step.pitches.sorted().map { NoteName.of($0) }.joined(separator: "+"))
-                        .font(.system(.title3, design: .monospaced))
-                        .padding(8)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(
-                            index == engine.currentIndex ? Color.blue.opacity(0.3)
-                            : index < engine.currentIndex ? Color.green.opacity(0.2) : Color.gray.opacity(0.1)))
-                }
-            }
+    @ViewBuilder private var staff: some View {
+        if let song {
+            StaffView(song: song,
+                      noteStates: engine.noteStates,
+                      wrongPitches: engine.keyStates.filter { $0.value == .wrong }.map(\.key).sorted(),
+                      scrollBeat: engine.currentStep?.startBeat ?? song.durationBeats)
+                .animation(.easeInOut(duration: 0.3), value: engine.currentIndex)
+                .frame(height: 360)
         }
     }
 

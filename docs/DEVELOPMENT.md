@@ -86,9 +86,11 @@ Bluetooth also works on the Mac: pair the piano in Audio MIDI Setup → MIDI Stu
 | `…/MIDIFileParser.swift` | `.mid` → `Song` (format 0/1, running status, hand assignment) |
 | `…/MIDIFileWriter.swift` | `Song` → `.mid`, plus `SampleSongs` |
 | `…/WaitModeEngine.swift` | `PracticeSteps` (chord grouping) and the wait-mode state machine |
+| `…/StaffLayout.swift` | Staff positions (clef, line/space, sharps, ledger lines), `NoteValue`, bar lines |
 | `App/Sources/MIDIInputService.swift` | CoreMIDI: connects all sources and publishes note on/off (also simulated events) |
 | `App/Sources/BluetoothMIDIPairingView.swift` | Wraps `CABTMIDICentralViewController` |
-| `App/Sources/PracticeView.swift` | Main screen: wait mode on the sample song |
+| `App/Sources/PracticeView.swift` | Main screen: wait mode on the sample song (staff + keyboard) |
+| `App/Sources/StaffView.swift` | Grand staff drawn in a `Canvas`, scrolling past the cursor (`scrollBeat` is animatable) |
 | `App/Sources/KeyboardView.swift` | On-screen piano that can be tapped; note-name labels and key colors |
 
 ## Conventions

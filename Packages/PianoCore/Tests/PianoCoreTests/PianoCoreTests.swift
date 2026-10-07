@@ -132,3 +132,58 @@ final class WaitModeTests: XCTestCase {
         XCTAssertEqual(engine.keyStates, [:])
     }
 }
+
+final class StaffLayoutTests: XCTestCase {
+    private func note(_ pitch: UInt8, _ hand: Hand = .unknown) -> NoteEvent {
+        NoteEvent(id: 0, pitch: pitch, startBeat: 0, durationBeats: 1, velocity: 80, hand: hand)
+    }
+
+    func testPositionsOnTrebleAndBass() {
+        XCTAssertEqual(StaffLayout.place(note(64)), StaffNote(clef: .treble, position: 0, sharp: false))  // E4 bottom line
+        XCTAssertEqual(StaffLayout.place(note(77)), StaffNote(clef: .treble, position: 8, sharp: false))  // F5 top line
+        XCTAssertEqual(StaffLayout.place(note(60)).position, -2)                                          // middle C: ledger line
+        XCTAssertEqual(StaffLayout.place(note(66)), StaffNote(clef: .treble, position: 1, sharp: true))   // F#4
+        XCTAssertEqual(StaffLayout.place(note(43)), StaffNote(clef: .bass, position: 0, sharp: false))    // G2 bottom line
+        XCTAssertEqual(StaffLayout.place(note(57)).position, 8)                                           // A3 top line
+        XCTAssertEqual(StaffLayout.place(note(60, .left)), StaffNote(clef: .bass, position: 10, sharp: false))  // C4 above bass staff
+    }
+
+    func testLedgerLinesAndStems() {
+        XCTAssertEqual(StaffLayout.place(note(60)).ledgerLines, [-2])
+        XCTAssertEqual(StaffLayout.place(note(57, .right)).ledgerLines, [-2, -4])   // A3 on treble
+        XCTAssertEqual(StaffLayout.place(note(81)).ledgerLines, [10])               // A5
+        XCTAssertEqual(StaffLayout.place(note(65)).ledgerLines, [])
+        XCTAssertTrue(StaffLayout.place(note(67)).stemUp)                           // G4, below middle line
+        XCTAssertFalse(StaffLayout.place(note(71)).stemUp)                          // B4, middle line
+    }
+
+    func testNoteValues() {
+        XCTAssertEqual(NoteValue.from(beats: 0.95), .quarter)
+        XCTAssertEqual(NoteValue.from(beats: 1.9), .half)
+        XCTAssertEqual(NoteValue.from(beats: 3.8), .whole)
+        XCTAssertEqual(NoteValue.from(beats: 0.5), .eighth)
+        XCTAssertEqual(NoteValue.from(beats: 0.2), .sixteenth)
+    }
+
+    func testBarlines() {
+        let twinkle = SampleSongs.twinkle   // 16 beats of 4/4 (no time signature in the file)
+        XCTAssertEqual(twinkle.barlineBeats, [4, 8, 12, 16])
+        var waltz = Song(title: "", timeSignatures: [TimeSignature(beat: 0, numerator: 3, denominator: 4)],
+                         notes: [NoteEvent(id: 0, pitch: 60, startBeat: 0, durationBeats: 9, velocity: 80)])
+        XCTAssertEqual(waltz.barlineBeats, [3, 6, 9])
+        waltz.timeSignatures.append(TimeSignature(beat: 6, numerator: 6, denominator: 8))
+        XCTAssertEqual(waltz.barlineBeats, [3, 6, 9])
+    }
+
+    func testNoteStates() {
+        let song = SampleSongs.twinkle      // step 0: C3+C4, step 1: C4
+        var engine = WaitModeEngine(steps: PracticeSteps.make(from: song.notes))
+        XCTAssertEqual(engine.noteStates, [0: .next, 1: .next])
+        _ = engine.noteOn(60)
+        XCTAssertEqual(engine.noteStates, [0: .next, 1: .played])
+        _ = engine.noteOn(50)
+        XCTAssertEqual(engine.noteStates, [0: .missed, 1: .played])
+        _ = engine.noteOn(48)
+        XCTAssertEqual(engine.noteStates, [0: .played, 1: .played, 2: .next])
+    }
+}

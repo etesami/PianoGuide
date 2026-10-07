@@ -94,7 +94,7 @@ bundled sample songs for testing.
 | **B. Piano roll (horizontal)**     | Bars move right to left past a playhead line, with keys down the left side | Seeing phrases, DAW-like                                                  | Low                                                                                                           |
 | **C. Staff notation (horizontal)** | Real sheet music scrolling past a playhead                                 | Learning to *read* music                                                  | **High.** Laying out real notation is hard; a renderer such as [Verovio](https://www.verovio.org) would help. |
 
-**Decided: B (horizontal piano roll) first.** The renderer sits behind a protocol (`NoteVisualizer`)
+**Decided: B (horizontal piano roll) first.** *Update 2026-10-06: the user asked for C (staff) now; a basic version exists.* The renderer sits behind a protocol (`NoteVisualizer`)
 so falling notes or **C (staff)** can be added later without touching the MIDI or practice logic.
 
 On-screen keyboard: an 88-key strip at the bottom that zooms to the song's note range.
@@ -193,7 +193,7 @@ document types so the app can open `.mid` and `.musicxml` files.
 | 5   | **Play-along mode** | Hit windows, scoring, and a summary at the end of the song                                          | ⬜ |
 | 6   | **Polish**          | Hand selection, A–B loop, metronome, latency calibration                                            | ⬜ |
 | 7   | **MusicXML**        | MusicXML import (hands and fingering come from the file)                                            | ⬜ |
-| 8   | **Staff view**      | A second renderer that shows staff notation                                                         | ⬜ |
+| 8   | **Staff view**      | A second renderer that shows staff notation                                                         | 🟡 basic grand staff with cursor and note colors in wait mode (session 6); no rests, beams, dots, flats yet |
 
 Legend: ⬜ not started · 🟡 in progress · ✅ done (verified on iPad).
 
