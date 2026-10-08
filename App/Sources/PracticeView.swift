@@ -1,11 +1,15 @@
 import PianoCore
 import SwiftUI
 
-/// First playable screen: wait mode on the bundled sample song.
-/// Upcoming steps are shown as text for now; falling notes come in milestone 3.
+/// Main screen: wait mode on the chosen song (a bundled sample or an imported .mid), shown on a scrolling grand staff.
 struct PracticeView: View {
     @EnvironmentObject private var midi: MIDIInputService
+    @StateObject private var library = SongLibrary()
     @State private var song: Song?
+    @State private var songEntry: SongLibrary.Entry?
+    @State private var showLibrary = false
+    /// The last song picked, as a file name ("twinkle.mid"); imported songs are looked up first.
+    @AppStorage("lastSong") private var lastSong = ""
     @State private var engine = WaitModeEngine(steps: [])
     @State private var loadError: String?
     @State private var showPairing = false
@@ -19,7 +23,7 @@ struct PracticeView: View {
         NavigationStack {
             VStack(spacing: 16) {
                 header
-                upcomingSteps
+                staff
                 Spacer()
                 KeyboardView(range: keyboardRange,
                              states: engine.keyStates,
@@ -34,7 +38,10 @@ struct PracticeView: View {
             .navigationTitle(song?.title ?? "PianoGuide")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Restart") { releaseLatched(); engine.reset() }
+                    Button { showLibrary = true } label: { Label("Songs", systemImage: "music.note.list") }
+                }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Restart") { releaseLatched(); recordAbandoned(); engine.reset() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showKeyLabels.toggle() } label: {
@@ -48,6 +55,9 @@ struct PracticeView: View {
             }
             .sheet(isPresented: $showPairing, onDismiss: midi.connectAllSources) {
                 BluetoothMIDIPairingView()
+            }
+            .sheet(isPresented: $showLibrary) {
+                SongLibraryView(library: library, current: songEntry, onPick: open)
             }
         }
         .onAppear(perform: load)
@@ -67,18 +77,14 @@ struct PracticeView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var upcomingSteps: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 12) {
-                ForEach(Array(engine.steps.enumerated()), id: \.offset) { index, step in
-                    Text(step.pitches.sorted().map { NoteName.of($0) }.joined(separator: "+"))
-                        .font(.system(.title3, design: .monospaced))
-                        .padding(8)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(
-                            index == engine.currentIndex ? Color.blue.opacity(0.3)
-                            : index < engine.currentIndex ? Color.green.opacity(0.2) : Color.gray.opacity(0.1)))
-                }
-            }
+    @ViewBuilder private var staff: some View {
+        if let song {
+            StaffView(song: song,
+                      noteStates: engine.noteStates,
+                      wrongPitches: engine.keyStates.filter { $0.value == .wrong }.map(\.key).sorted(),
+                      scrollBeat: engine.currentStep?.startBeat ?? song.durationBeats)
+                .animation(.easeInOut(duration: 0.3), value: engine.currentIndex)
+                .frame(height: 360)
         }
     }
 
@@ -112,6 +118,9 @@ struct PracticeView: View {
                 case .wrong: flash = .red
                 case .stepCompleted:
                     flash = .green
+                    if engine.isFinished, let songEntry {
+                        library.updateProgress(of: songEntry) { $0.recordCompleted(mistakes: engine.wrongCount) }
+                    }
                     DispatchQueue.main.async(execute: releaseLatched)
                 default: break
                 }
@@ -121,16 +130,32 @@ struct PracticeView: View {
             }
         }
         guard song == nil else { return }
+        let all = library.imported + library.allSamples
+        guard let entry = all.first(where: { $0.url.lastPathComponent == lastSong }) ?? library.samples.first else {
+            loadError = "Sample song missing from app bundle"
+            return
+        }
+        open(entry)
+    }
+
+    /// Leaving a song before the end still counts its wrong notes towards the difficult mark.
+    private func recordAbandoned() {
+        guard let songEntry, !engine.isFinished else { return }
+        library.updateProgress(of: songEntry) { $0.recordAbandoned(mistakes: engine.wrongCount) }
+    }
+
+    private func open(_ entry: SongLibrary.Entry) {
         do {
-            guard let url = Bundle.main.url(forResource: "twinkle", withExtension: "mid", subdirectory: "SampleSongs") else {
-                loadError = "Sample song missing from app bundle"
-                return
-            }
-            let loaded = try MIDIFileParser.parse(Data(contentsOf: url), title: "Twinkle Twinkle")
+            let loaded = try library.load(entry)
+            releaseLatched()
+            recordAbandoned()
             song = loaded
+            songEntry = entry
             engine = WaitModeEngine(steps: PracticeSteps.make(from: loaded.notes))
+            loadError = nil
+            lastSong = entry.url.lastPathComponent
         } catch {
-            loadError = "Could not load song: \(error)"
+            loadError = "Could not load \(entry.name): " + SongLibraryView.describe(error)
         }
     }
 }

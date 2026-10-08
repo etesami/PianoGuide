@@ -4,6 +4,7 @@ import Foundation
 public struct PracticeStep: Equatable, Sendable {
     public var startBeat: Double
     public var noteIDs: [Int]
+    public var notePitches: [UInt8]     // pitch of each note in `noteIDs`, same order
     public var pitches: Set<UInt8>
 }
 
@@ -15,9 +16,10 @@ public enum PracticeSteps {
         for note in notes.filter({ hands.contains($0.hand) }).sorted(by: { $0.startBeat < $1.startBeat }) {
             if let last = steps.last, note.startBeat - last.startBeat <= tolerance {
                 steps[steps.count - 1].noteIDs.append(note.id)
+                steps[steps.count - 1].notePitches.append(note.pitch)
                 steps[steps.count - 1].pitches.insert(note.pitch)
             } else {
-                steps.append(PracticeStep(startBeat: note.startBeat, noteIDs: [note.id], pitches: [note.pitch]))
+                steps.append(PracticeStep(startBeat: note.startBeat, noteIDs: [note.id], notePitches: [note.pitch], pitches: [note.pitch]))
             }
         }
         return steps
@@ -95,6 +97,27 @@ public struct WaitModeEngine: Sendable {
         }
         for pitch in heldCorrect { states[pitch] = .correct }
         for pitch in heldWrong { states[pitch] = .wrong }
+        return states
+    }
+
+    /// How a written note should be highlighted on the staff.
+    public enum NoteState: Equatable, Sendable {
+        case played     // its step is done, or it is held down in the current chord
+        case next       // part of the current step, not pressed yet
+        case missed     // part of the current step, not pressed yet, after a wrong note in this step
+    }
+
+    /// State of every note up to the current step, by note ID; notes not in the map are still to come.
+    public var noteStates: [Int: NoteState] {
+        var states: [Int: NoteState] = [:]
+        for step in steps.prefix(currentIndex) {
+            for id in step.noteIDs { states[id] = .played }
+        }
+        if let step = currentStep {
+            for (id, pitch) in zip(step.noteIDs, step.notePitches) {
+                states[id] = hitInCurrentStep.contains(pitch) ? .played : wrongInCurrentStep ? .missed : .next
+            }
+        }
         return states
     }
 

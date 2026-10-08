@@ -2,16 +2,16 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-10-06 (session 5: key labels and new key colors, verified with the real piano)
+Last updated: 2026-10-07 (session 10: completed and difficult marks in the song list)
 
 ## Where we are
 
-Milestones 0–2 and 4 are partly done (see the table in [PLAN.md §8](../PLAN.md#8-milestones)).
+Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.md §8](../PLAN.md#8-milestones)).
 
 **Verified:**
 - `PianoCore` package: the `Song` model, a Standard MIDI File parser and writer, `PracticeSteps` (groups chords),
   `WaitModeEngine`, and the sample song "Twinkle Twinkle" (`App/Resources/SampleSongs/twinkle.mid`).
-  10 XCTest tests pass with `scripts/check-core.sh` (`swift test`); the package is in Swift 6 language mode (session 4).
+  15 XCTest tests pass with `scripts/check-core.sh` (`swift test`); the package is in Swift 6 language mode (session 4).
 - **The app builds with Xcode 26.3 (Swift 6.2, iOS 26.2 SDK) and runs in the iPad Pro 11" simulator** (2026-10-06):
   title, connection hint, step strip (C3+C4, C4, G4, …) and the keyboard (C2–C5). Tapping keys can't be done from the command line.
 - **FP-30X connected to the Mac by USB-C**: macOS sees it as MIDI source "Roland Digital Piano" (2026-10-06).
@@ -25,14 +25,88 @@ Milestones 0–2 and 4 are partly done (see the table in [PLAN.md §8](../PLAN.m
 - **Key colors** (session 5, confirmed by the user on the real piano): a key is green if it was correct when pressed,
   red if wrong, and keeps that color until released (even after the step moves on). After a wrong note, the keys
   still needed for the step turn orange until the step is done. No blue hint on the keyboard. Logic: `WaitModeEngine.keyStates`.
+- **Staff view** (session 6, seen in simulator screenshots; not yet tried by the user): the song is drawn on a grand staff
+  (treble = right hand, bass = left hand) with clefs, time signature, bar lines, note heads (whole/half/quarter/eighth/16th),
+  stems, flags, sharps and ledger lines. A blue cursor sits just before the next notes and the music slides left
+  (animated) when a step is done. Colors: played = green, next = blue, still needed after a wrong note = orange,
+  held wrong keys = red heads at the cursor. It replaces the old text strip of steps. Layout math is in
+  `PianoCore/StaffLayout.swift` (tested); drawing is `App/Sources/StaffView.swift` (a `Canvas`).
+  Checked by temporarily auto-playing the first steps through `midi.simulate` (hook removed afterwards).
 
-**Not yet verified:** running on the real iPad; in-app Bluetooth pairing.
+- **Song library** (session 7): a "Songs" toolbar button (music-list icon) opens a sheet with the bundled samples and
+  "My Songs". **Import** opens the Files picker (`.mid`, several at once); each file is checked with the parser, then copied
+  into Documents/Songs (a name clash adds " 2"). Picking a single imported file opens it right away. Swipe to delete imported
+  songs. The title of an imported song is its file name. The last song is remembered (`@AppStorage("lastSong")`).
+  Verified in the simulator: a song copied into Documents/Songs loads on launch with the right title, steps and keyboard range.
+  **Not verified:** the sheet and the Files picker themselves (taps can't be done from the command line).
+- **Test songs for import** (session 7): `TestSongs/Ode to Joy.mid` (two tracks, left-hand triads, dotted rhythm) and
+  `TestSongs/Minuet in G.mid` (single track split at middle C, 3/4, eighths, F#, tempo change); see `TestSongs/README.md`.
+  Generated from `PianoCore/TestSongs.swift`; the writer now also writes time signatures and single-track files.
+  Both load in the simulator with the right time signature, hands and step count.
+- **Finger numbers** (session 7): notes with a finger show it on the staff, above treble notes and below bass notes
+  (clear of stems; stacked for chords), in the note's color. In `.mid` files a finger is stored as a lyric event "1"–"5"
+  just before the note-on (our own convention; MIDI has no standard; the writer and parser both handle it).
+  New bundled samples for **practising C → F → D → C five-finger positions**: "Positions C-F-D (right hand)" and
+  "Positions C-F-D (both hands)" (16 bars each, 4/4, 90 BPM; the first note of each bar in each hand shows its finger).
+  F position avoids B♭ because the staff can't show flats yet. Seen in the simulator (bar starts, left-hand 5 under the bass
+  staff, both hands together, D position with F#), using a temporary auto-play hook that was removed. 18 tests pass.
+
+- **Song categories** (session 8): bundled samples in a subfolder of `App/Resources/SampleSongs/` belong to that category,
+  and the Songs sheet shows each category as a folder row (tap to open its songs) above the loose samples ("twinkle").
+  The two C-F-D position songs are now in **Intermediate III** (path set in `SampleSongs.all`, e.g.
+  `"Intermediate III/Positions C-F-D (right hand)"`; `write-samples` creates the folder). Verified: 18 tests pass, the
+  `.app` contains `SampleSongs/Intermediate III/`, and the last song reopens from that folder in the simulator.
+  **Not verified:** tapping the folder in the sheet. Only Intermediate III exists so far; other levels not yet named.
+
+- **Staff zoom by bars** (session 9, user's request): the staff's horizontal scale is no longer fixed; it is set so that,
+  from the next note at the cursor, **two whole bars plus the first note of the third bar** fit on screen (uses the
+  starting time signature, `TimeSignature.beatsPerBar`). The played-notes area left of the cursor is unchanged. Since the
+  music scrolls step by step, this is exact when the cursor is at a bar start; mid-bar, more of the third bar shows.
+  Seen in the simulator (Positions C-F-D both hands, 4/4). 18 tests pass.
+
+- **Positions series** (session 9, replaces the two "Positions C-F-D" songs): `PositionPractice.series` in
+  `PositionSongs.swift` makes three practices, each adding one position: **1. C position**, **2. C + F positions**,
+  **3. C + F + D positions**, each as "(right hand)" and "(both hands)", all in Intermediate III. Each position now
+  gets 8 bars (two 4-bar phrases, was 4), and every practice ends with 8 more bars back in C (practice 1 = C twice).
+  Lengths: 16 / 24 / 32 bars. Still no B♭ (right-hand 4 and left-hand 2 aren't used in F). 18 tests pass; seen in the
+  simulator ("2. C + F positions (both hands)", 72 steps). **Not verified:** playing through the new phrases by hand.
+
+- **Finger coordination drills** (session 9): `FingerPractice` in `FingerSongs.swift`, four bundled songs in
+  Intermediate III, each 16 bars in C position (white keys), 4/4, 90 BPM, **finger number on every note**
+  (`PositionSongBuilder.fingerEveryNote`): **Fingers 1 · Pairs** (1-2, 2-3, 3-4, 4-5; right hand 8 bars, then left),
+  **Fingers 2 · Skips** (1-3, 2-4, 3-5; same layout), **Fingers 3 · Mirror (hands together)** (same finger numbers,
+  hands move in opposite directions), **Fingers 4 · Parallel (hands together)** (same note names an octave apart,
+  left finger = 6 − right finger). 19 tests pass; "Fingers 4" seen in the simulator (58 steps).
+  **Not verified:** playing them by hand.
+
+- **Song progress marks** (session 10, user's request): `SongProgress` in `PianoCore/SongProgress.swift` (tested), kept per
+  song by `SongLibrary` in UserDefaults (`songProgress`, JSON keyed by path inside SampleSongs, or "My Songs/<file>").
+  A song played to the end gets a **green check** instead of the note icon and "Completed N×". Wrong notes are recorded when
+  the song ends, or when it is left early (Restart / another song) with at least one wrong note; with **5 or more** wrong
+  notes (`SongProgress.difficultMistakes`) the row is **tinted orange** with a warning triangle and "Difficult · N wrong notes".
+  An unfinished attempt can only raise the count, so the mark goes away only by finishing with fewer than 5 mistakes.
+  Category folder rows show "x/y completed" and a triangle if a song inside is difficult. The current song's marker is now a
+  play icon (was a checkmark, which clashed with "completed"). Deleting an imported song forgets its progress.
+  Seen in the simulator with seeded progress and a temporary hook that opened the sheet (removed). 20 tests pass.
+  **Not verified:** recording by actually playing a song through; leaving the app mid-song records nothing.
+
+**Not yet verified:** running on the real iPad; in-app Bluetooth pairing; the Songs sheet and import picker by hand.
 
 ## Next steps (in order)
 
-1. Milestone 3: build the **horizontal piano roll** view (a `Canvas` with notes moving right to left past a playhead), with play/pause and tempo.
-2. Milestone 2 polish: import `.mid` files from the Files app (`fileImporter`) and keep a song library.
-3. Later: switch the app target to Swift 6 (`SWIFT_VERSION` in `project.yml`; core types are already `Sendable`).
+1. User to try the completed/difficult marks: is 5 wrong notes the right threshold (or should it scale with song length)?
+   Should there be a way to reset a song's progress?
+2. User to try the positions series (1 → 2 → 3) and the Fingers drills (1 → 4) with the real piano (Catalyst build) and say whether the finger numbers are enough
+   (more notes? a toggle? position names like "F position" above the staff? finger numbers on the keyboard keys?).
+   Also try the Songs sheet and importing the files in `TestSongs/`.
+2. Import follow-ups, only if wanted: "Open in…" / AirDrop into the app (document types in `project.yml`), renaming songs,
+   more bundled samples.
+3. Staff view gaps: rests, beams for eighths, dotted notes, flats/key signatures, neighbouring chord notes (seconds)
+   overlap, and the notes are spaced by time (not by engraving rules). Add only what the user asks for.
+4. Milestone 3 (piano roll + running clock, play/pause, tempo): **on hold (user's call, 2026-10-06).** Open questions
+   when it resumes: horizontal roll vs falling notes (the keyboard strip is at the bottom), whether wait mode uses the
+   clock to glide between steps, and no scoring while the clock runs freely (that is milestone 5).
+5. Later: switch the app target to Swift 6 (`SWIFT_VERSION` in `project.yml`; core types are already `Sendable`).
 
 **On hold (user's call, 2026-10-06): real-iPad testing.** Don't ask about or plan around it until the user brings it back.
 Test in the simulator (on-screen keys) and the Mac Catalyst build (real piano) instead. When it resumes (the Apple ID
@@ -54,7 +128,13 @@ and team are already set up): connect the iPad, turn on Developer Mode, install 
 | 2026-10-06 | Apple ID added; `DEVELOPMENT_TEAM: YC58PFGW9Q` (personal team) is in `project.yml`. Mac Catalyst builds sign to run locally ("-"), so choosing "My Mac" in Xcode works. |
 | 2026-10-06 | Core tests use XCTest (`swift test`); `PianoCore` uses swift-tools 6.0 / Swift 6 mode, iOS 17+ / macOS 14+. The old plain-`swiftc` check runner was removed. |
 | 2026-10-06 | Key colors: green = correct, red = wrong (decided at press time), orange = needed keys after a mistake; no blue "next key" hint on the keyboard (user's choice). |
+| 2026-10-06 | **Staff notation moved ahead of the piano roll** (user asked for sheet-music style like Simply Piano): grand staff that scrolls past a fixed cursor; MIDI notes are rounded to the nearest note value; black keys are spelled as sharps. |
 | 2026-10-06 | Hands in MIDI files: 2 or more note tracks means track 1 is the right hand and track 2 the left; a single track is split at middle C (60). |
+| 2026-10-06 | **Milestone 3 (piano roll) on hold**; song import done first (user's call). |
+| 2026-10-06 | Fingering in `.mid` files: a lyric meta event with a single digit 1–5 right before the note-on (same tick, same track). MusicXML (milestone 7) will be the proper source later. |
+| 2026-10-07 | Song categories (levels) for bundled samples = subfolders of SampleSongs; C-F-D positions go in "Intermediate III" (user's call). Imported songs stay flat in "My Songs". |
+| 2026-10-07 | Position practices are a numbered series, each adding one position (1. C, 2. C + F, 3. C + F + D), 8 bars per position (user's call). |
+| 2026-10-06 | Song library: imported `.mid` files are **copied** into the app (Documents/Songs), so they stay if the original moves; the file name is the song title; the last song opens on launch. No database: the folder is the library. |
 
 ## Known issues / caveats
 

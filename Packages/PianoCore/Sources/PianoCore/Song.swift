@@ -41,6 +41,9 @@ public struct TimeSignature: Equatable, Sendable {
     public var beat: Double
     public var numerator: Int
     public var denominator: Int
+
+    /// Length of one bar in quarter-note beats (4/4 = 4, 3/4 = 3, 6/8 = 3).
+    public var beatsPerBar: Double { Double(numerator) * 4 / Double(denominator) }
 }
 
 public struct Song: Sendable {
