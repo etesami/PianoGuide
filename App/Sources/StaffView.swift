@@ -19,7 +19,7 @@ struct StaffView: View, Animatable {
 
     var body: some View {
         Canvas { context, size in
-            let m = Metrics(size: size)
+            let m = Metrics(size: size, beatsPerBar: song.initialTimeSignature.beatsPerBar)
             drawStaves(&context, m)
             drawClefsAndTime(&context, m)
             var music = context
@@ -47,7 +47,7 @@ struct StaffView: View, Animatable {
         let cursorX: CGFloat
         let pxPerBeat: CGFloat
 
-        init(size: CGSize) {
+        init(size: CGSize, beatsPerBar: Double) {
             // Height: 4 spaces of ledger room above, 4 for each staff, 6 between, 4 below.
             sp = size.height / 22
             trebleBottom = sp * 8
@@ -56,7 +56,11 @@ struct StaffView: View, Animatable {
             staffRight = size.width - sp
             musicStartX = staffLeft + sp * 7
             cursorX = musicStartX + sp * 11      // room to see the last played notes
-            pxPerBeat = sp * 8
+            // Zoom so that, from the next note at the cursor, two whole bars fit on screen plus
+            // the first note of the bar after them (with room for its head).
+            let firstNoteX = cursorX + sp * 1.6
+            let room = staffRight - sp * 1.5 - firstNoteX
+            pxPerBeat = max(sp, room / CGFloat(2 * max(beatsPerBar, 1)))
         }
 
         func y(_ clef: Clef, position: Int) -> CGFloat {

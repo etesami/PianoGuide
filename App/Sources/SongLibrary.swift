@@ -4,6 +4,7 @@ import PianoCore
 /// The songs the user can pick: bundled samples plus `.mid` files imported from the Files app.
 /// Bundled samples in a subfolder of SampleSongs belong to that category (e.g. "Intermediate III").
 /// Imported files are copied into the app's Documents/Songs folder, so they stay after the original moves.
+/// Also keeps each song's `SongProgress` (completed / difficult), saved in UserDefaults.
 final class SongLibrary: ObservableObject {
     struct Category: Identifiable, Hashable {
         let name: String
@@ -16,19 +17,42 @@ final class SongLibrary: ObservableObject {
         let isSample: Bool
         var id: URL { url }
         var name: String { url.deletingPathExtension().lastPathComponent }
+        /// Stable across launches: the path inside SampleSongs ("Intermediate III/x.mid"), or "My Songs/x.mid".
+        var progressKey: String {
+            isSample ? url.pathComponents.drop { $0 != "SampleSongs" }.dropFirst().joined(separator: "/")
+                     : "My Songs/" + url.lastPathComponent
+        }
     }
 
     /// Samples outside any category folder.
     @Published private(set) var samples: [Entry] = []
     @Published private(set) var categories: [Category] = []
     @Published private(set) var imported: [Entry] = []
+    @Published private(set) var progress: [String: SongProgress] = [:]
+    private static let progressDefaultsKey = "songProgress"
 
     private let folder: URL
 
     init() {
         folder = URL.documentsDirectory.appending(path: "Songs", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        if let data = UserDefaults.standard.data(forKey: Self.progressDefaultsKey) {
+            progress = (try? JSONDecoder().decode([String: SongProgress].self, from: data)) ?? [:]
+        }
         reload()
+    }
+
+    func progress(of entry: Entry) -> SongProgress { progress[entry.progressKey] ?? SongProgress() }
+
+    func updateProgress(of entry: Entry, _ change: (inout SongProgress) -> Void) {
+        change(&progress[entry.progressKey, default: SongProgress()])
+        saveProgress()
+    }
+
+    private func saveProgress() {
+        if let data = try? JSONEncoder().encode(progress) {
+            UserDefaults.standard.set(data, forKey: Self.progressDefaultsKey)
+        }
     }
 
     func reload() {
@@ -77,6 +101,9 @@ final class SongLibrary: ObservableObject {
     func delete(_ entry: Entry) {
         guard !entry.isSample else { return }
         try? FileManager.default.removeItem(at: entry.url)
+        // A later import with the same name is a new song.
+        progress[entry.progressKey] = nil
+        saveProgress()
         reload()
     }
 

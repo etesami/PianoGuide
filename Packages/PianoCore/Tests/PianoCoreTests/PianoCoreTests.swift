@@ -43,14 +43,40 @@ final class MIDIFileTests: XCTestCase {
         XCTAssertEqual(FivePosition.d.pitch(finger: 3, hand: .right), 66, "F#4")
         XCTAssertEqual(FivePosition.c.pitch(finger: 5, hand: .left), 48, "C3")
         XCTAssertEqual(FivePosition.f.pitch(finger: 5, hand: .left), 41, "F2")
-        let song = SampleSongs.positionsRightHand
-        XCTAssertEqual(song.durationBeats, 63.8, accuracy: 0.001, "16 bars, ending on a whole note")
+        XCTAssertEqual(PositionPractice.series.map(\.name),
+                       ["1. C position", "2. C + F positions", "3. C + F + D positions"])
+        let song = PositionPractice.series[2].rightHand
+        XCTAssertEqual(song.durationBeats, 127.8, accuracy: 0.001, "C, F, D, C: 32 bars, ending on a whole note")
+        XCTAssertEqual(PositionPractice.series[0].rightHand.durationBeats, 63.8, accuracy: 0.001, "C twice: 16 bars")
         // Bar starts show fingers: C position starts on C4 with 1, F on F4 with 1, D on D4 with 1.
         let fingered = song.notes.filter { $0.finger != nil }
-        XCTAssertEqual(fingered.count, 16)
-        XCTAssertEqual(fingered.filter { [0, 16, 32].contains($0.startBeat) }.map(\.pitch), [60, 65, 62])
-        XCTAssertFalse(song.notes.contains { $0.pitch == 70 }, "no B flat")
-        XCTAssertFalse(SampleSongs.positionsBothHands.notes.contains { $0.pitch % 12 == 10 }, "no B flat")
+        XCTAssertEqual(fingered.count, 32)
+        XCTAssertEqual(fingered.filter { [0, 32, 64, 96].contains($0.startBeat) }.map(\.pitch), [60, 65, 62, 60])
+        for practice in PositionPractice.series {
+            XCTAssertFalse(practice.rightHand.notes.contains { $0.pitch % 12 == 10 }, "no B flat")
+            XCTAssertFalse(practice.bothHands.notes.contains { $0.pitch % 12 == 10 }, "no B flat")
+        }
+    }
+
+    func testFingerPractices() {
+        XCTAssertEqual(FingerPractice.allCases.map(\.name),
+                       ["Fingers 1 · Pairs", "Fingers 2 · Skips",
+                        "Fingers 3 · Mirror (hands together)", "Fingers 4 · Parallel (hands together)"])
+        for practice in FingerPractice.allCases {
+            let song = practice.song
+            XCTAssertEqual(song.durationBeats, 63.8, accuracy: 0.001, "\(practice): 16 bars")
+            XCTAssertTrue(song.notes.allSatisfy { $0.finger != nil }, "\(practice): every note has a finger")
+            XCTAssertFalse(song.notes.contains { NoteName.isBlackKey($0.pitch) }, "\(practice): white keys only")
+        }
+        // Mirror: same fingers (C4 with G3); parallel: same note names (C4 with C3).
+        let mirror = FingerPractice.mirror.song.notes.filter { $0.startBeat == 0 }
+        XCTAssertEqual(mirror.map(\.finger), [1, 1])
+        XCTAssertEqual(mirror.map(\.pitch), [55, 60])
+        let parallel = FingerPractice.parallel.song.notes.filter { $0.startBeat == 0 }
+        XCTAssertEqual(parallel.map(\.pitch), [48, 60])
+        XCTAssertEqual(parallel.map(\.finger), [5, 1])
+        // Pairs: the left hand starts at bar 9.
+        XCTAssertEqual(FingerPractice.pairs.song.notes.first { $0.hand == .left }?.startBeat, 32)
     }
 
     func testRunningStatusVelocityZeroAndSingleTrackHandSplit() throws {
@@ -183,6 +209,33 @@ final class WaitModeTests: XCTestCase {
     }
 }
 
+final class SongProgressTests: XCTestCase {
+    func testCompletedAndDifficult() throws {
+        var progress = SongProgress()
+        XCTAssertFalse(progress.isCompleted)
+        XCTAssertFalse(progress.isDifficult)
+
+        progress.recordAbandoned(mistakes: 0)
+        XCTAssertNil(progress.mistakes, "leaving without a mistake records nothing")
+        progress.recordAbandoned(mistakes: 6)
+        XCTAssertTrue(progress.isDifficult)
+        XCTAssertFalse(progress.isCompleted)
+
+        progress.recordCompleted(mistakes: 2)
+        XCTAssertTrue(progress.isCompleted)
+        XCTAssertFalse(progress.isDifficult, "finishing with few mistakes clears the mark")
+        progress.recordAbandoned(mistakes: 1)
+        XCTAssertEqual(progress.mistakes, 2, "an unfinished attempt only raises the count")
+
+        progress.recordCompleted(mistakes: 5)
+        XCTAssertEqual(progress.timesCompleted, 2)
+        XCTAssertTrue(progress.isDifficult)
+
+        let decoded = try JSONDecoder().decode(SongProgress.self, from: JSONEncoder().encode(progress))
+        XCTAssertEqual(decoded, progress)
+    }
+}
+
 final class StaffLayoutTests: XCTestCase {
     private func note(_ pitch: UInt8, _ hand: Hand = .unknown) -> NoteEvent {
         NoteEvent(id: 0, pitch: pitch, startBeat: 0, durationBeats: 1, velocity: 80, hand: hand)
@@ -223,6 +276,9 @@ final class StaffLayoutTests: XCTestCase {
         XCTAssertEqual(waltz.barlineBeats, [3, 6, 9])
         waltz.timeSignatures.append(TimeSignature(beat: 6, numerator: 6, denominator: 8))
         XCTAssertEqual(waltz.barlineBeats, [3, 6, 9])
+        XCTAssertEqual(TimeSignature(beat: 0, numerator: 4, denominator: 4).beatsPerBar, 4)
+        XCTAssertEqual(TimeSignature(beat: 0, numerator: 3, denominator: 4).beatsPerBar, 3)
+        XCTAssertEqual(TimeSignature(beat: 0, numerator: 6, denominator: 8).beatsPerBar, 3)
     }
 
     func testNoteStates() {

@@ -4,6 +4,8 @@ import UniformTypeIdentifiers
 
 /// Sheet listing the bundled samples (with category folders) and imported songs. Tap a song to practise it,
 /// swipe to delete an imported one, or import `.mid` files from the Files app.
+/// Songs played to the end at least once get a green check; songs with many recent wrong notes are tinted orange
+/// as difficult (`SongProgress`). The song open now has a play icon.
 struct SongLibraryView: View {
     @ObservedObject var library: SongLibrary
     var current: SongLibrary.Entry?
@@ -24,8 +26,9 @@ struct SongLibraryView: View {
                             HStack {
                                 Label(category.name, systemImage: "folder")
                                 Spacer()
+                                folderSummary(category.songs)
                                 if category.songs.contains(where: { $0 == current }) {
-                                    Image(systemName: "checkmark").foregroundColor(.accentColor)
+                                    Image(systemName: "play.fill").foregroundColor(.accentColor)
                                 }
                             }
                         }
@@ -66,17 +69,53 @@ struct SongLibraryView: View {
     }
 
     private func row(_ entry: SongLibrary.Entry) -> some View {
-        Button {
+        let progress = self.progress(entry)
+        return Button {
             onPick(entry)
             dismiss()
         } label: {
             HStack {
-                Label(entry.name, systemImage: "music.note")
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.name)
+                        if let detail = Self.detail(progress) {
+                            Text(detail).font(.caption)
+                                .foregroundColor(progress.isDifficult ? .orange : .secondary)
+                        }
+                    }
+                } icon: {
+                    Image(systemName: progress.isCompleted ? "checkmark.circle.fill" : "music.note")
+                        .foregroundColor(progress.isCompleted ? .green : .accentColor)
+                }
                 Spacer()
-                if entry == current { Image(systemName: "checkmark").foregroundColor(.accentColor) }
+                if progress.isDifficult {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange)
+                }
+                if entry == current { Image(systemName: "play.fill").foregroundColor(.accentColor) }
             }
         }
         .foregroundColor(.primary)
+        .listRowBackground(progress.isDifficult ? Color.orange.opacity(0.15) : nil)
+    }
+
+    private func progress(_ entry: SongLibrary.Entry) -> SongProgress { library.progress(of: entry) }
+
+    /// "Completed 2× · 3 wrong notes", "Difficult · 7 wrong notes", or nil if never played.
+    private static func detail(_ progress: SongProgress) -> String? {
+        var parts: [String] = []
+        if progress.isDifficult { parts.append("Difficult") }
+        if progress.isCompleted { parts.append("Completed \(progress.timesCompleted)×") }
+        if let mistakes = progress.mistakes { parts.append("\(mistakes) wrong note\(mistakes == 1 ? "" : "s")") }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// "3/10 completed", plus a warning if any song inside is difficult.
+    @ViewBuilder private func folderSummary(_ songs: [SongLibrary.Entry]) -> some View {
+        let done = songs.filter { progress($0).isCompleted }.count
+        if done > 0 { Text("\(done)/\(songs.count) completed").font(.caption).foregroundColor(.secondary) }
+        if songs.contains(where: { progress($0).isDifficult }) {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange)
+        }
     }
 
     private func importFiles(_ result: Result<[URL], Error>) {

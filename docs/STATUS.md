@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-10-07 (session 8: song categories; the C-F-D position songs are under "Intermediate III")
+Last updated: 2026-10-07 (session 10: completed and difficult marks in the song list)
 
 ## Where we are
 
@@ -58,11 +58,45 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   `.app` contains `SampleSongs/Intermediate III/`, and the last song reopens from that folder in the simulator.
   **Not verified:** tapping the folder in the sheet. Only Intermediate III exists so far; other levels not yet named.
 
+- **Staff zoom by bars** (session 9, user's request): the staff's horizontal scale is no longer fixed; it is set so that,
+  from the next note at the cursor, **two whole bars plus the first note of the third bar** fit on screen (uses the
+  starting time signature, `TimeSignature.beatsPerBar`). The played-notes area left of the cursor is unchanged. Since the
+  music scrolls step by step, this is exact when the cursor is at a bar start; mid-bar, more of the third bar shows.
+  Seen in the simulator (Positions C-F-D both hands, 4/4). 18 tests pass.
+
+- **Positions series** (session 9, replaces the two "Positions C-F-D" songs): `PositionPractice.series` in
+  `PositionSongs.swift` makes three practices, each adding one position: **1. C position**, **2. C + F positions**,
+  **3. C + F + D positions**, each as "(right hand)" and "(both hands)", all in Intermediate III. Each position now
+  gets 8 bars (two 4-bar phrases, was 4), and every practice ends with 8 more bars back in C (practice 1 = C twice).
+  Lengths: 16 / 24 / 32 bars. Still no B♭ (right-hand 4 and left-hand 2 aren't used in F). 18 tests pass; seen in the
+  simulator ("2. C + F positions (both hands)", 72 steps). **Not verified:** playing through the new phrases by hand.
+
+- **Finger coordination drills** (session 9): `FingerPractice` in `FingerSongs.swift`, four bundled songs in
+  Intermediate III, each 16 bars in C position (white keys), 4/4, 90 BPM, **finger number on every note**
+  (`PositionSongBuilder.fingerEveryNote`): **Fingers 1 · Pairs** (1-2, 2-3, 3-4, 4-5; right hand 8 bars, then left),
+  **Fingers 2 · Skips** (1-3, 2-4, 3-5; same layout), **Fingers 3 · Mirror (hands together)** (same finger numbers,
+  hands move in opposite directions), **Fingers 4 · Parallel (hands together)** (same note names an octave apart,
+  left finger = 6 − right finger). 19 tests pass; "Fingers 4" seen in the simulator (58 steps).
+  **Not verified:** playing them by hand.
+
+- **Song progress marks** (session 10, user's request): `SongProgress` in `PianoCore/SongProgress.swift` (tested), kept per
+  song by `SongLibrary` in UserDefaults (`songProgress`, JSON keyed by path inside SampleSongs, or "My Songs/<file>").
+  A song played to the end gets a **green check** instead of the note icon and "Completed N×". Wrong notes are recorded when
+  the song ends, or when it is left early (Restart / another song) with at least one wrong note; with **5 or more** wrong
+  notes (`SongProgress.difficultMistakes`) the row is **tinted orange** with a warning triangle and "Difficult · N wrong notes".
+  An unfinished attempt can only raise the count, so the mark goes away only by finishing with fewer than 5 mistakes.
+  Category folder rows show "x/y completed" and a triangle if a song inside is difficult. The current song's marker is now a
+  play icon (was a checkmark, which clashed with "completed"). Deleting an imported song forgets its progress.
+  Seen in the simulator with seeded progress and a temporary hook that opened the sheet (removed). 20 tests pass.
+  **Not verified:** recording by actually playing a song through; leaving the app mid-song records nothing.
+
 **Not yet verified:** running on the real iPad; in-app Bluetooth pairing; the Songs sheet and import picker by hand.
 
 ## Next steps (in order)
 
-1. User to try the position songs with the real piano (Catalyst build) and say whether the finger numbers are enough
+1. User to try the completed/difficult marks: is 5 wrong notes the right threshold (or should it scale with song length)?
+   Should there be a way to reset a song's progress?
+2. User to try the positions series (1 → 2 → 3) and the Fingers drills (1 → 4) with the real piano (Catalyst build) and say whether the finger numbers are enough
    (more notes? a toggle? position names like "F position" above the staff? finger numbers on the keyboard keys?).
    Also try the Songs sheet and importing the files in `TestSongs/`.
 2. Import follow-ups, only if wanted: "Open in…" / AirDrop into the app (document types in `project.yml`), renaming songs,
@@ -99,6 +133,7 @@ and team are already set up): connect the iPad, turn on Developer Mode, install 
 | 2026-10-06 | **Milestone 3 (piano roll) on hold**; song import done first (user's call). |
 | 2026-10-06 | Fingering in `.mid` files: a lyric meta event with a single digit 1–5 right before the note-on (same tick, same track). MusicXML (milestone 7) will be the proper source later. |
 | 2026-10-07 | Song categories (levels) for bundled samples = subfolders of SampleSongs; C-F-D positions go in "Intermediate III" (user's call). Imported songs stay flat in "My Songs". |
+| 2026-10-07 | Position practices are a numbered series, each adding one position (1. C, 2. C + F, 3. C + F + D), 8 bars per position (user's call). |
 | 2026-10-06 | Song library: imported `.mid` files are **copied** into the app (Documents/Songs), so they stay if the original moves; the file name is the song title; the last song opens on launch. No database: the folder is the library. |
 
 ## Known issues / caveats

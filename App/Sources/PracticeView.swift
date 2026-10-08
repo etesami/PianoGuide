@@ -41,7 +41,7 @@ struct PracticeView: View {
                     Button { showLibrary = true } label: { Label("Songs", systemImage: "music.note.list") }
                 }
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Restart") { releaseLatched(); engine.reset() }
+                    Button("Restart") { releaseLatched(); recordAbandoned(); engine.reset() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showKeyLabels.toggle() } label: {
@@ -118,6 +118,9 @@ struct PracticeView: View {
                 case .wrong: flash = .red
                 case .stepCompleted:
                     flash = .green
+                    if engine.isFinished, let songEntry {
+                        library.updateProgress(of: songEntry) { $0.recordCompleted(mistakes: engine.wrongCount) }
+                    }
                     DispatchQueue.main.async(execute: releaseLatched)
                 default: break
                 }
@@ -135,10 +138,17 @@ struct PracticeView: View {
         open(entry)
     }
 
+    /// Leaving a song before the end still counts its wrong notes towards the difficult mark.
+    private func recordAbandoned() {
+        guard let songEntry, !engine.isFinished else { return }
+        library.updateProgress(of: songEntry) { $0.recordAbandoned(mistakes: engine.wrongCount) }
+    }
+
     private func open(_ entry: SongLibrary.Entry) {
         do {
             let loaded = try library.load(entry)
             releaseLatched()
+            recordAbandoned()
             song = loaded
             songEntry = entry
             engine = WaitModeEngine(steps: PracticeSteps.make(from: loaded.notes))

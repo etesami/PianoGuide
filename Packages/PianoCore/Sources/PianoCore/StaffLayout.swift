@@ -81,7 +81,7 @@ extension Song {
         let end = durationBeats
         var bars: [Double] = []
         for (i, sig) in signatures.enumerated() {
-            let barLength = Double(sig.numerator) * 4 / Double(sig.denominator)
+            let barLength = sig.beatsPerBar
             guard barLength > 0 else { continue }
             let isLast = i + 1 == signatures.count
             let sectionEnd = isLast ? end : signatures[i + 1].beat

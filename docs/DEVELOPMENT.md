@@ -97,15 +97,17 @@ Bluetooth also works on the Mac: pair the piano in Audio MIDI Setup → MIDI Stu
 | `Packages/PianoCore/Sources/PianoCore/Song.swift` | `Song`, `NoteEvent`, tempo map (`seconds(atBeat:)`), `NoteName` |
 | `…/MIDIFileParser.swift` | `.mid` → `Song` (format 0/1, running status, hand assignment, fingers from lyric events) |
 | `…/MIDIFileWriter.swift` | `Song` → `.mid` (format 1 per hand, or single-track format 0; tempo and time signatures), plus `SampleSongs` |
-| `…/PositionSongs.swift` | `FivePosition` (C/F/D finger → key) and the "Positions C-F-D" sample songs |
+| `…/PositionSongs.swift` | `FivePosition` (C/F/D finger → key) and `PositionPractice`: the positions series (1. C, 2. C + F, 3. C + F + D), right hand and both hands |
+| `…/FingerSongs.swift` | `FingerPractice`: five-finger coordination drills (pairs, skips, mirror, parallel) |
 | `…/TestSongs.swift` | Songs for trying the import ("Ode to Joy", "Minuet in G"); written to `TestSongs/` |
 | `…/WaitModeEngine.swift` | `PracticeSteps` (chord grouping) and the wait-mode state machine |
 | `…/StaffLayout.swift` | Staff positions (clef, line/space, sharps, ledger lines), `NoteValue`, bar lines |
+| `…/SongProgress.swift` | Per-song progress: times completed, recent wrong notes, "difficult" rule (5+ wrong notes) |
 | `App/Sources/MIDIInputService.swift` | CoreMIDI: connects all sources and publishes note on/off (also simulated events) |
 | `App/Sources/BluetoothMIDIPairingView.swift` | Wraps `CABTMIDICentralViewController` |
 | `App/Sources/PracticeView.swift` | Main screen: wait mode on the chosen song (staff + keyboard); remembers the last song |
-| `App/Sources/SongLibrary.swift` | Bundled samples (subfolders = categories) + imported `.mid` files (copied to Documents/Songs); import, delete, load |
-| `App/Sources/SongLibraryView.swift` | "Songs" sheet: category folders, pick a song, swipe to delete, Import button (`fileImporter`) |
+| `App/Sources/SongLibrary.swift` | Bundled samples (subfolders = categories) + imported `.mid` files (copied to Documents/Songs); import, delete, load; each song's `SongProgress` (UserDefaults `songProgress`) |
+| `App/Sources/SongLibraryView.swift` | "Songs" sheet: category folders, pick a song, swipe to delete, Import button (`fileImporter`); completed (green check) and difficult (orange) marks |
 | `App/Sources/StaffView.swift` | Grand staff drawn in a `Canvas`, scrolling past the cursor (`scrollBeat` is animatable) |
 | `App/Sources/KeyboardView.swift` | On-screen piano that can be tapped; note-name labels and key colors |
 

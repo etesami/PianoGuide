@@ -19,44 +19,76 @@ public enum FivePosition: String, CaseIterable, Sendable {
     }
 }
 
-extension SampleSongs {
-    /// Right hand only: C position (bars 1–4), F (5–8), D (9–12), back to C (13–16). 4/4, 90 BPM.
+/// One practice in the positions series: each one adds a position to the one before.
+public struct PositionPractice: Sendable {
+    public var number: Int
+    /// Positions in the order they are learned; the practice plays them in turn, then returns to C.
+    public var positions: [FivePosition]
+
+    /// 1. C, 2. C + F, 3. C + F + D.
+    public static let series: [PositionPractice] = [
+        PositionPractice(number: 1, positions: [.c]),
+        PositionPractice(number: 2, positions: [.c, .f]),
+        PositionPractice(number: 3, positions: [.c, .f, .d]),
+    ]
+
+    /// "1. C position", "2. C + F positions", "3. C + F + D positions".
+    public var name: String {
+        "\(number). " + positions.map(\.rawValue).joined(separator: " + ")
+            + (positions.count == 1 ? " position" : " positions")
+    }
+
+    /// The order the positions are played: each in turn, then back to C (C alone is played twice).
+    var route: [FivePosition] { positions + [.c] }
+
+    /// Right hand only, 8 bars per position (two 4-bar phrases), 4/4, 90 BPM.
     /// The first note of each bar shows its finger number.
-    public static var positionsRightHand: Song {
-        let phrase: [[(finger: Int, beats: Double)]] = [
+    public var rightHand: Song {
+        // F position has no finger 4 (B♭), so its phrases avoid it.
+        let phrases: [[(finger: Int, beats: Double)]] = [
             [(1, 1), (2, 1), (3, 1), (4, 1)],
             [(5, 1), (4, 1), (3, 1), (2, 1)],
             [(1, 1), (3, 1), (5, 1), (3, 1)],
             [(1, 4)],
+            [(3, 1), (4, 1), (5, 2)],
+            [(5, 1), (3, 1), (4, 1), (2, 1)],
+            [(3, 1), (2, 1), (1, 1), (2, 1)],
+            [(1, 4)],
         ]
-        // F position has no finger 4 (B♭), so its phrase avoids it.
-        let fPhrase: [[(finger: Int, beats: Double)]] = [
+        let fPhrases: [[(finger: Int, beats: Double)]] = [
             [(1, 1), (2, 1), (3, 1), (2, 1)],
             [(1, 1), (3, 1), (5, 1), (3, 1)],
             [(5, 1), (3, 1), (2, 1), (3, 1)],
             [(1, 4)],
+            [(1, 1), (2, 1), (3, 2)],
+            [(5, 1), (3, 1), (2, 1), (1, 1)],
+            [(3, 1), (5, 1), (3, 1), (2, 1)],
+            [(1, 4)],
         ]
         var builder = PositionSongBuilder()
-        for position in [FivePosition.c, .f, .d, .c] {
-            for bar in position == .f ? fPhrase : phrase {
+        for position in route {
+            for bar in position == .f ? fPhrases : phrases {
                 builder.bar(right: bar, left: [], in: position)
             }
         }
-        return builder.song(title: "Positions C-F-D (right hand)")
+        return builder.song(title: name + " (right hand)")
     }
 
-    /// Both hands, in turns: right hand, then left hand, then right hand, then both together on a whole note.
-    /// The left hand uses fingers 5, 4, 3 only, so F position needs no B♭.
-    /// Same positions as `positionsRightHand` (C, F, D, C). The first note of each bar in each hand shows its finger.
-    public static var positionsBothHands: Song {
+    /// Both hands, 8 bars per position: hands take turns, and each phrase ends with both hands together.
+    /// The left hand never uses finger 2 and the right hand never uses finger 4, so F position needs no B♭.
+    public var bothHands: Song {
         var builder = PositionSongBuilder()
-        for position in [FivePosition.c, .f, .d, .c] {
+        for position in route {
             builder.bar(right: [(1, 1), (2, 1), (3, 1), (2, 1)], left: [], in: position)
             builder.bar(right: [], left: [(5, 1), (4, 1), (3, 1), (4, 1)], in: position)
             builder.bar(right: [(1, 1), (3, 1), (5, 1), (3, 1)], left: [], in: position)
             builder.bar(right: [(1, 4)], left: [(5, 4)], in: position)
+            builder.bar(right: [(3, 1), (2, 1), (1, 2)], left: [], in: position)
+            builder.bar(right: [], left: [(3, 1), (4, 1), (5, 2)], in: position)
+            builder.bar(right: [(5, 1), (3, 1), (2, 1), (1, 1)], left: [(1, 1), (3, 1), (4, 1), (5, 1)], in: position)
+            builder.bar(right: [(1, 4)], left: [(5, 4)], in: position)
         }
-        return builder.song(title: "Positions C-F-D (both hands)")
+        return builder.song(title: name + " (both hands)")
     }
 }
 
@@ -64,6 +96,8 @@ extension SampleSongs {
 struct PositionSongBuilder {
     private var notes: [NoteEvent] = []
     private var barStart = 0.0
+    /// Show the finger on every note (otherwise only on the first note of each bar in each hand).
+    var fingerEveryNote = false
 
     mutating func bar(right: [(finger: Int, beats: Double)], left: [(finger: Int, beats: Double)],
                       in position: FivePosition) {
@@ -73,7 +107,7 @@ struct PositionSongBuilder {
                 notes.append(NoteEvent(id: 0, pitch: position.pitch(finger: item.finger, hand: hand),
                                        startBeat: beat, durationBeats: item.beats * 0.95,
                                        velocity: hand == .right ? 85 : 70, hand: hand,
-                                       finger: i == 0 ? item.finger : nil))
+                                       finger: i == 0 || fingerEveryNote ? item.finger : nil))
                 beat += item.beats
             }
         }
