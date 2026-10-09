@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-10-08 (session 11: user marks songs hard or interesting)
+Last updated: 2026-10-08 (session 12: timed mode with speed, metronome and pause)
 
 ## Where we are
 
@@ -99,10 +99,30 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   from the automatic orange "Difficult" (5+ wrong notes). 21 tests pass; seen in the simulator with seeded marks and a
   temporary hook that opened the sheet (removed). **Not verified:** the swipe, long-press menu and flag button by hand.
 
+- **Timed mode** (session 12, user's request): a **Wait | Timed** switch in the middle of the toolbar (remembered,
+  `@AppStorage("timedMode")`). In timed mode the song doesn't wait: after **Play** there is one bar of metronome clicks
+  (count-in), then the music scrolls continuously past the cursor at the chosen **speed** (stepper, 25–150 % of the song's
+  tempo in 5 % steps, shown with the resulting BPM; `@AppStorage("timedSpeed")`, default 75 %). A **metronome** clicks every
+  quarter-note beat (higher click on beat 1 of the bar). **Pause** stops the music and clicks; Play resumes where it was
+  (no count-in on resume). Each note can be hit within **half a beat** either side of its start; once that window passes,
+  unplayed notes turn **orange (missed)**, played ones green; a key that matches no note in its window counts as **wrong**
+  (red key, red flash). The header shows "Played X of N · missed Y · wrong Z". Chords don't need to be held together here
+  and on-screen keys don't latch. At the end the song is recorded as completed with mistakes = missed + wrong
+  (so 5+ gives the "Difficult" mark); stopping early (Restart, other song, switching mode) records them like wait mode.
+  Logic: `PianoCore/TimedModeEngine.swift` (tested; also `Song.bpm(atBeat:)` / `beat(after:from:speed:)`); app:
+  `TimedSession.swift` (60 Hz clock + engine), `Metronome.swift` (AVAudioEngine, synthesized clicks). 23 tests pass;
+  iOS simulator and Mac Catalyst build; seen in simulator screenshots with a temporary auto-play hook (removed): count-in,
+  scrolling, missed notes turning orange, wrong notes counted. **Not verified:** hearing the clicks, the buttons by hand,
+  playing along with the real piano (timing/latency of the half-beat window).
+
 **Not yet verified:** running on the real iPad; in-app Bluetooth pairing; the Songs sheet and import picker by hand.
 
 ## Next steps (in order)
 
+0. User to try timed mode with the real piano (Catalyst build). Open questions: is ±½ beat the right hit window (it gets
+   wider in seconds at slow speeds)? Should missed notes be red instead of orange? Count-in on resume after Pause?
+   Should a timed run with many misses count as "Completed"? Clicks are fired from a 60 Hz timer (up to ~16 ms jitter);
+   schedule them on the audio clock if they sound uneven.
 0. User to try marking songs (swipe right, long-press, or the flag button while practising). Open questions: are two
    marks enough, or should a song have both / a note? Should the automatic "Difficult" be merged with the "Hard" mark?
 1. User to try the completed/difficult marks: is 5 wrong notes the right threshold (or should it scale with song length)?
@@ -114,7 +134,7 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
    more bundled samples.
 3. Staff view gaps: rests, beams for eighths, dotted notes, flats/key signatures, neighbouring chord notes (seconds)
    overlap, and the notes are spaced by time (not by engraving rules). Add only what the user asks for.
-4. Milestone 3 (piano roll + running clock, play/pause, tempo): **on hold (user's call, 2026-10-06).** Open questions
+4. Milestone 3 (piano roll; the running clock, play/pause and tempo now exist as timed mode on the staff): **on hold (user's call, 2026-10-06).** Open questions
    when it resumes: horizontal roll vs falling notes (the keyboard strip is at the bottom), whether wait mode uses the
    clock to glide between steps, and no scoring while the clock runs freely (that is milestone 5).
 5. Later: switch the app target to Swift 6 (`SWIFT_VERSION` in `project.yml`; core types are already `Sendable`).
@@ -146,6 +166,7 @@ and team are already set up): connect the iPad, turn on Developer Mode, install 
 | 2026-10-07 | Song categories (levels) for bundled samples = subfolders of SampleSongs; C-F-D positions go in "Intermediate III" (user's call). Imported songs stay flat in "My Songs". |
 | 2026-10-07 | Position practices are a numbered series, each adding one position (1. C, 2. C + F, 3. C + F + D), 8 bars per position (user's call). |
 | 2026-10-08 | User marks: one mark per song, **Hard** or **Interesting** (or none), kept apart from the automatic "Difficult"; marked songs get their own "Marked" section at the top of the Songs sheet. |
+| 2026-10-08 | Timed mode: speed is a % of the song's tempo (keeps tempo changes); one-bar count-in; metronome on every quarter beat; ±½-beat hit window; missed = orange on the staff; missed + wrong count as mistakes for progress. |
 | 2026-10-06 | Song library: imported `.mid` files are **copied** into the app (Documents/Songs), so they stay if the original moves; the file name is the song title; the last song opens on launch. No database: the folder is the library. |
 
 ## Known issues / caveats

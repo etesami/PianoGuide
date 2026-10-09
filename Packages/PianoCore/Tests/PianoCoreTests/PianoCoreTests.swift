@@ -306,3 +306,44 @@ final class StaffLayoutTests: XCTestCase {
         XCTAssertEqual(engine.noteStates, [0: .played, 1: .played, 2: .next])
     }
 }
+
+final class TimedModeTests: XCTestCase {
+    private let notes = [
+        NoteEvent(id: 0, pitch: 60, startBeat: 0, durationBeats: 1, velocity: 80),
+        NoteEvent(id: 1, pitch: 64, startBeat: 0, durationBeats: 1, velocity: 80),
+        NoteEvent(id: 2, pitch: 62, startBeat: 1, durationBeats: 1, velocity: 80),
+        NoteEvent(id: 3, pitch: 62, startBeat: 1.5, durationBeats: 1, velocity: 80),
+        NoteEvent(id: 4, pitch: 67, startBeat: 3, durationBeats: 1, velocity: 80),
+    ]
+
+    func testHitsMissesAndWrongNotes() {
+        var engine = TimedModeEngine(steps: PracticeSteps.make(from: notes), window: 0.5, startBeat: -4)
+        XCTAssertEqual(engine.noteOn(60), .wrong(pitch: 60), "too early, during the count-in")
+        engine.advance(to: -0.4)
+        XCTAssertEqual(engine.noteOn(60), .hit(noteID: 0), "a little early is fine")
+        XCTAssertEqual(engine.noteStates[1], .next)
+        engine.advance(to: 0.6)
+        XCTAssertEqual(engine.missedNotes, [1], "the other chord note was never played")
+        XCTAssertEqual(engine.judgedCount, 1)
+        engine.advance(to: 1.3)
+        XCTAssertEqual(engine.noteOn(62), .hit(noteID: 3), "the closer of two D's")
+        XCTAssertEqual(engine.noteOn(62), .hit(noteID: 2), "then the other one")
+        XCTAssertEqual(engine.noteOn(62), .wrong(pitch: 62), "no D left in the window")
+        XCTAssertEqual(engine.keyStates, [60: .correct, 62: .wrong], "held keys keep their last verdict")
+        engine.noteOff(62)
+        engine.advance(to: 10)
+        XCTAssertTrue(engine.isFinished)
+        XCTAssertEqual(engine.missedNotes, [1, 4])
+        XCTAssertEqual(engine.wrongCount, 2)
+        XCTAssertEqual(engine.noteStates, [0: .played, 1: .missed, 2: .played, 3: .played, 4: .missed])
+        XCTAssertEqual(engine.noteCount, 5)
+    }
+
+    func testPlayheadFollowsTempoAndSpeed() {
+        let song = Song(title: "t", tempoMap: [TempoChange(beat: 0, microsecondsPerQuarter: 500_000),
+                                                TempoChange(beat: 4, microsecondsPerQuarter: 1_000_000)], notes: [])
+        XCTAssertEqual(song.beat(after: 1, from: 0, speed: 1), 2, "120 BPM")
+        XCTAssertEqual(song.beat(after: 1, from: -4, speed: 0.5), -3, "count-in uses the first tempo, at half speed")
+        XCTAssertEqual(song.beat(after: 1, from: 5, speed: 1), 6, "60 BPM after beat 4")
+    }
+}

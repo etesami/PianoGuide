@@ -191,7 +191,7 @@ document types so the app can open `.mid` and `.musicxml` files.
 | 2   | **Import & model**  | A `.mid` file loads into `Song`; the note list shows in a debug view; importer tests pass           | 🟡 parser done and tested; song library with import from the Files app (session 7); no "Open in…" yet |
 | 3   | **Piano roll**      | The song scrolls smoothly at 60/120 fps with a playhead, play/pause and tempo slider                | ⬜ |
 | 4   | **Wait mode**       | The song waits for the correct note or chord, with correct and wrong feedback                       | 🟡 engine done and tested; works with the real piano (Mac Catalyst), with green/red/orange key feedback; per-song progress (completed / difficult marks in the song list, session 10); user marks hard / interesting (session 11) |
-| 5   | **Play-along mode** | Hit windows, scoring, and a summary at the end of the song                                          | ⬜ |
+| 5   | **Play-along mode** | Hit windows, scoring, and a summary at the end of the song                                          | 🟡 timed mode (session 12): speed, metronome, pause, ±½-beat hit window, played/missed/wrong counts; no end-of-song summary screen yet |
 | 6   | **Polish**          | Hand selection, A–B loop, metronome, latency calibration                                            | ⬜ |
 | 7   | **MusicXML**        | MusicXML import (hands and fingering come from the file)                                            | ⬜ |
 | 8   | **Staff view**      | A second renderer that shows staff notation                                                         | 🟡 basic grand staff with cursor and note colors in wait mode (session 6); no rests, beams, dots, flats yet |
