@@ -234,6 +234,19 @@ final class SongProgressTests: XCTestCase {
         let decoded = try JSONDecoder().decode(SongProgress.self, from: JSONEncoder().encode(progress))
         XCTAssertEqual(decoded, progress)
     }
+
+    func testMarkIsSavedAndOldDataStillLoads() throws {
+        var progress = SongProgress()
+        progress.mark = .interesting
+        progress.recordCompleted(mistakes: 7)
+        XCTAssertEqual(progress.mark, .interesting, "playing doesn't change the user's mark")
+        let decoded = try JSONDecoder().decode(SongProgress.self, from: JSONEncoder().encode(progress))
+        XCTAssertEqual(decoded.mark, .interesting)
+
+        let old = try JSONDecoder().decode(SongProgress.self, from: Data(#"{"timesCompleted":1,"mistakes":2}"#.utf8))
+        XCTAssertNil(old.mark)
+        XCTAssertEqual(old.timesCompleted, 1)
+    }
 }
 
 final class StaffLayoutTests: XCTestCase {

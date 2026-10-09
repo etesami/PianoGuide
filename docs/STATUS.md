@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-10-07 (session 10: completed and difficult marks in the song list)
+Last updated: 2026-10-08 (session 11: user marks songs hard or interesting)
 
 ## Where we are
 
@@ -90,10 +90,21 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   Seen in the simulator with seeded progress and a temporary hook that opened the sheet (removed). 20 tests pass.
   **Not verified:** recording by actually playing a song through; leaving the app mid-song records nothing.
 
+- **User marks** (session 11, user's request): the user can mark a song **Hard** (red flag) or **Interesting**
+  (yellow star) to come back to it later. `SongMark` is stored as `SongProgress.mark` (same UserDefaults JSON; older
+  saved data without it still loads, tested). Set it by **swiping a song row right**, **long-pressing** it (menu:
+  No Mark / Hard / Interesting), or with the **flag button** in the practice toolbar for the open song (the button
+  shows the current mark). Marked songs from everywhere (folders and My Songs) are also listed in a **"Marked"** section
+  at the top of the Songs sheet. Playing never changes the mark; deleting an imported song forgets it. This is separate
+  from the automatic orange "Difficult" (5+ wrong notes). 21 tests pass; seen in the simulator with seeded marks and a
+  temporary hook that opened the sheet (removed). **Not verified:** the swipe, long-press menu and flag button by hand.
+
 **Not yet verified:** running on the real iPad; in-app Bluetooth pairing; the Songs sheet and import picker by hand.
 
 ## Next steps (in order)
 
+0. User to try marking songs (swipe right, long-press, or the flag button while practising). Open questions: are two
+   marks enough, or should a song have both / a note? Should the automatic "Difficult" be merged with the "Hard" mark?
 1. User to try the completed/difficult marks: is 5 wrong notes the right threshold (or should it scale with song length)?
    Should there be a way to reset a song's progress?
 2. User to try the positions series (1 → 2 → 3) and the Fingers drills (1 → 4) with the real piano (Catalyst build) and say whether the finger numbers are enough
@@ -134,6 +145,7 @@ and team are already set up): connect the iPad, turn on Developer Mode, install 
 | 2026-10-06 | Fingering in `.mid` files: a lyric meta event with a single digit 1–5 right before the note-on (same tick, same track). MusicXML (milestone 7) will be the proper source later. |
 | 2026-10-07 | Song categories (levels) for bundled samples = subfolders of SampleSongs; C-F-D positions go in "Intermediate III" (user's call). Imported songs stay flat in "My Songs". |
 | 2026-10-07 | Position practices are a numbered series, each adding one position (1. C, 2. C + F, 3. C + F + D), 8 bars per position (user's call). |
+| 2026-10-08 | User marks: one mark per song, **Hard** or **Interesting** (or none), kept apart from the automatic "Difficult"; marked songs get their own "Marked" section at the top of the Songs sheet. |
 | 2026-10-06 | Song library: imported `.mid` files are **copied** into the app (Documents/Songs), so they stay if the original moves; the file name is the song title; the last song opens on launch. No database: the folder is the library. |
 
 ## Known issues / caveats

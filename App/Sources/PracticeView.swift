@@ -44,6 +44,17 @@ struct PracticeView: View {
                     Button("Restart") { releaseLatched(); recordAbandoned(); engine.reset() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
+                    if let songEntry {
+                        let mark = library.progress(of: songEntry).mark
+                        Menu {
+                            SongMarkPicker(mark: Binding(get: { mark }, set: { library.setMark($0, of: songEntry) }))
+                        } label: {
+                            Label(mark?.title ?? "Mark Song", systemImage: mark?.systemImage ?? "flag")
+                        }
+                        .tint(mark?.color)
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button { showKeyLabels.toggle() } label: {
                         Label(showKeyLabels ? "Hide Key Labels" : "Show Key Labels",
                               systemImage: showKeyLabels ? "textformat" : "textformat.slash")

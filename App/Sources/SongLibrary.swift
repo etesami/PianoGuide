@@ -4,7 +4,8 @@ import PianoCore
 /// The songs the user can pick: bundled samples plus `.mid` files imported from the Files app.
 /// Bundled samples in a subfolder of SampleSongs belong to that category (e.g. "Intermediate III").
 /// Imported files are copied into the app's Documents/Songs folder, so they stay after the original moves.
-/// Also keeps each song's `SongProgress` (completed / difficult), saved in UserDefaults.
+/// Also keeps each song's `SongProgress` (completed / difficult, and the user's hard / interesting mark),
+/// saved in UserDefaults.
 final class SongLibrary: ObservableObject {
     struct Category: Identifiable, Hashable {
         let name: String
@@ -47,6 +48,17 @@ final class SongLibrary: ObservableObject {
     func updateProgress(of entry: Entry, _ change: (inout SongProgress) -> Void) {
         change(&progress[entry.progressKey, default: SongProgress()])
         saveProgress()
+    }
+
+    func setMark(_ mark: SongMark?, of entry: Entry) {
+        updateProgress(of: entry) { $0.mark = mark }
+    }
+
+    /// Songs the user marked hard or interesting, from everywhere in the library, by name.
+    var marked: [Entry] {
+        (imported + allSamples)
+            .filter { progress(of: $0).mark != nil }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
     private func saveProgress() {
