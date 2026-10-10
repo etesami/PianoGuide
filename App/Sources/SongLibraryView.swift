@@ -6,6 +6,8 @@ import UniformTypeIdentifiers
 /// swipe to delete an imported one, or import `.mid` files from the Files app.
 /// Songs played to the end at least once get a green check; songs with many recent wrong notes are tinted orange
 /// as difficult (`SongProgress`). The song open now has a play icon.
+/// The user can mark a song hard or interesting (swipe right or long-press); marked songs are also listed in
+/// "Marked" at the top, to find them again later.
 struct SongLibraryView: View {
     @ObservedObject var library: SongLibrary
     var current: SongLibrary.Entry?
@@ -17,6 +19,11 @@ struct SongLibraryView: View {
     var body: some View {
         NavigationStack {
             List {
+                if !library.marked.isEmpty {
+                    Section("Marked") {
+                        ForEach(library.marked) { row($0) }
+                    }
+                }
                 Section("Samples") {
                     ForEach(library.categories) { category in
                         NavigationLink {
@@ -88,6 +95,9 @@ struct SongLibraryView: View {
                         .foregroundColor(progress.isCompleted ? .green : .accentColor)
                 }
                 Spacer()
+                if let mark = progress.mark {
+                    Image(systemName: mark.systemImage).foregroundColor(mark.color)
+                }
                 if progress.isDifficult {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange)
                 }
@@ -96,6 +106,20 @@ struct SongLibraryView: View {
         }
         .foregroundColor(.primary)
         .listRowBackground(progress.isDifficult ? Color.orange.opacity(0.15) : nil)
+        .swipeActions(edge: .leading) {
+            ForEach(SongMark.allCases, id: \.self) { mark in
+                Button {
+                    library.setMark(progress.mark == mark ? nil : mark, of: entry)
+                } label: {
+                    Label(progress.mark == mark ? "Unmark" : mark.title, systemImage: mark.systemImage)
+                }
+                .tint(mark.color)
+            }
+        }
+        .contextMenu {
+            SongMarkPicker(mark: Binding(get: { library.progress(of: entry).mark },
+                                         set: { library.setMark($0, of: entry) }))
+        }
     }
 
     private func progress(_ entry: SongLibrary.Entry) -> SongProgress { library.progress(of: entry) }
@@ -147,5 +171,43 @@ struct SongLibraryView: View {
         case .truncated?: return "the file is damaged or cut short."
         case nil: return error.localizedDescription
         }
+    }
+}
+
+extension SongMark {
+    var title: String {
+        switch self {
+        case .hard: return "Hard"
+        case .interesting: return "Interesting"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .hard: return "flag.fill"
+        case .interesting: return "star.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .hard: return .red
+        case .interesting: return .yellow
+        }
+    }
+}
+
+/// Menu items to mark a song hard or interesting, or clear the mark. Used in the song list and the practice toolbar.
+struct SongMarkPicker: View {
+    @Binding var mark: SongMark?
+
+    var body: some View {
+        Picker("Mark", selection: $mark) {
+            Text("No Mark").tag(SongMark?.none)
+            ForEach(SongMark.allCases, id: \.self) { mark in
+                Label(mark.title, systemImage: mark.systemImage).tag(SongMark?.some(mark))
+            }
+        }
+        .pickerStyle(.inline)
     }
 }

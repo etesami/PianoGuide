@@ -92,7 +92,7 @@ public struct PositionPractice: Sendable {
     }
 }
 
-/// Builds a 4/4 song bar by bar from finger numbers.
+/// Builds a 4/4 song bar by bar from finger numbers; finger 0 is a rest.
 struct PositionSongBuilder {
     private var notes: [NoteEvent] = []
     private var barStart = 0.0
@@ -104,11 +104,12 @@ struct PositionSongBuilder {
         for (hand, fingers) in [(Hand.right, right), (.left, left)] {
             var beat = barStart
             for (i, item) in fingers.enumerated() {
+                defer { beat += item.beats }
+                if item.finger == 0 { continue }
                 notes.append(NoteEvent(id: 0, pitch: position.pitch(finger: item.finger, hand: hand),
                                        startBeat: beat, durationBeats: item.beats * 0.95,
                                        velocity: hand == .right ? 85 : 70, hand: hand,
                                        finger: i == 0 || fingerEveryNote ? item.finger : nil))
-                beat += item.beats
             }
         }
         barStart += 4

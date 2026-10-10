@@ -83,6 +83,7 @@ public enum SampleSongs {
                  ("Intermediate III/\(practice.name) (both hands)", practice.bothHands)]
             }
             + FingerPractice.allCases.map { ("Intermediate III/\($0.name)", $0.song) }
+            + HandsPractice.allCases.map { ("Intermediate III/\($0.name)", $0.song) }
     }
 
     /// "Twinkle Twinkle Little Star" opening, right-hand melody + simple left-hand notes, 100 BPM.

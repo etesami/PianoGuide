@@ -10,6 +10,7 @@
 ```sh
 scripts/check-core.sh                                   # = (cd Packages/PianoCore && swift test)
 scripts/check-core.sh --write-samples App/Resources/SampleSongs   # regenerate sample .mid files
+scripts/make-icon.sh                                               # redraw the app icon from App/Icon/AppIcon.svg
 scripts/check-core.sh --write-test-songs TestSongs                # regenerate the import test songs
 ```
 
@@ -102,12 +103,18 @@ Bluetooth also works on the Mac: pair the piano in Audio MIDI Setup → MIDI Stu
 | `…/TestSongs.swift` | Songs for trying the import ("Ode to Joy", "Minuet in G"); written to `TestSongs/` |
 | `…/WaitModeEngine.swift` | `PracticeSteps` (chord grouping) and the wait-mode state machine |
 | `…/StaffLayout.swift` | Staff positions (clef, line/space, sharps, ledger lines), `NoteValue`, bar lines |
-| `…/SongProgress.swift` | Per-song progress: times completed, recent wrong notes, "difficult" rule (5+ wrong notes) |
+| `…/PracticeResult.swift` | Result of a finished run (perfect / almost / needs practice), shown by `PracticeResultView` |
+| `…/SongProgress.swift` | Per-song progress: times completed, recent wrong notes, "difficult" rule (mistakes > 10% of the notes); the user's own `SongMark` (hard / interesting) |
+| `…/PracticeNote.swift` | Lesson note parsed from a small Markdown subset (title, headings, bullets, paragraphs) and `StaffExample` (```` ```staff ```` music examples) |
+| `App/Resources/SampleSongs/<level>/x.md` | Lesson note for `x.mid`, shown when the song is picked |
+| `App/Icon/AppIcon.svg` | App icon source; `scripts/make-icon.sh` writes `App/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png` (one 1024 px image; Xcode makes the iPad and Mac sizes) |
+| `App/Sources/PracticeResultView.swift` | Card shown when a song ends: green (passed) or orange (needs practice), Practice Again / Close |
+| `App/Sources/PracticeNoteView.swift` | Sheet showing a lesson note (scrolls; "Start Practice" closes it) |
 | `App/Sources/MIDIInputService.swift` | CoreMIDI: connects all sources and publishes note on/off (also simulated events) |
 | `App/Sources/BluetoothMIDIPairingView.swift` | Wraps `CABTMIDICentralViewController` |
 | `App/Sources/PracticeView.swift` | Main screen: wait mode on the chosen song (staff + keyboard); remembers the last song |
 | `App/Sources/SongLibrary.swift` | Bundled samples (subfolders = categories) + imported `.mid` files (copied to Documents/Songs); import, delete, load; each song's `SongProgress` (UserDefaults `songProgress`) |
-| `App/Sources/SongLibraryView.swift` | "Songs" sheet: category folders, pick a song, swipe to delete, Import button (`fileImporter`); completed (green check) and difficult (orange) marks |
+| `App/Sources/SongLibraryView.swift` | "Songs" sheet: category folders, pick a song, swipe to delete, Import button (`fileImporter`); completed (green check) and difficult (orange) marks; user marks (swipe right / long-press, "Marked" section); `SongMarkPicker` (also used by the flag button in `PracticeView`) |
 | `App/Sources/StaffView.swift` | Grand staff drawn in a `Canvas`, scrolling past the cursor (`scrollBeat` is animatable) |
 | `App/Sources/KeyboardView.swift` | On-screen piano that can be tapped; note-name labels and key colors |
 

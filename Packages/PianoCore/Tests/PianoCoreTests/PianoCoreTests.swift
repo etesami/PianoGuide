@@ -24,6 +24,80 @@ final class MIDIFileTests: XCTestCase {
         }
     }
 
+    func testEveryBundledSampleHasANote() throws {
+        // Each sample "x.mid" has its lesson in "x.md" next to it, with a title and some text.
+        let dir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("../../App/Resources/SampleSongs").standardized
+        for (name, _) in SampleSongs.all {
+            let note = PracticeNote(markdown: try String(contentsOf: dir.appendingPathComponent(name + ".md"), encoding: .utf8))
+            XCTAssertNotNil(note.title, name)
+            XCTAssertFalse(note.blocks.isEmpty, name)
+            // At least one music example, and every one readable.
+            XCTAssertTrue(note.blocks.contains { if case .staff = $0 { return true } else { return false } }, name)
+            for case .invalidStaff(let reason) in note.blocks { XCTFail("\(name): \(reason)") }
+        }
+    }
+
+    func testPracticeNoteMarkdown() {
+        let note = PracticeNote(markdown: """
+            # Pairs
+
+            Keep your **wrist** still
+            and relaxed.
+
+            ## Watch for
+            - finger 4
+              is the weakest
+            * curve your fingers
+            Last line.
+            """)
+        XCTAssertEqual(note.title, "Pairs")
+        XCTAssertEqual(note.blocks, [
+            .paragraph("Keep your **wrist** still and relaxed."),
+            .heading("Watch for"),
+            .bullet("finger 4 is the weakest"),
+            .bullet("curve your fingers"),
+            .paragraph("Last line."),
+        ])
+        XCTAssertNil(PracticeNote(markdown: "Just text").title)
+        XCTAssertTrue(PracticeNote(markdown: "\n\n").isEmpty)
+    }
+
+    func testStaffExample() throws {
+        let note = PracticeNote(markdown: """
+            Text before.
+            ```staff
+            right: C4/1 E4/3! G4/5:2
+            left: C3/5+G3/1:4
+            time: 4/4
+            caption: The C chord
+            ```
+            ```staff
+            right: H4
+            ```
+            """)
+        XCTAssertEqual(note.blocks.count, 3)
+        guard case .staff(let example) = note.blocks[1] else { return XCTFail("no staff") }
+        XCTAssertEqual(example.notes.map(\.pitch), [48, 55, 60, 64, 67])
+        XCTAssertEqual(example.notes.map(\.startBeat), [0, 0, 0, 1, 2])
+        XCTAssertEqual(example.notes.map(\.hand), [.left, .left, .right, .right, .right])
+        XCTAssertEqual(example.notes.map(\.finger), [5, 1, 1, 3, 5])
+        XCTAssertEqual(example.notes.last?.durationBeats, 2)
+        XCTAssertEqual(example.highlighted, [3], "E4")
+        XCTAssertEqual(example.caption, "The C chord")
+        XCTAssertEqual(example.song.durationBeats, 4)
+        guard case .invalidStaff = note.blocks[2] else { return XCTFail("bad note name should be reported") }
+
+        let rest = try StaffExample("right: r:2 F#4:2\ntime: 3/4")
+        XCTAssertEqual(rest.notes.map(\.pitch), [66])
+        XCTAssertEqual(rest.notes.first?.startBeat, 2)
+        XCTAssertEqual(rest.timeSignature.numerator, 3)
+        XCTAssertEqual(try StaffExample("left: C3+G3:4! E3").highlighted, [0, 1], "! after the length: whole chord")
+        XCTAssertThrowsError(try StaffExample("right: C4/6"))
+        XCTAssertThrowsError(try StaffExample("caption: no notes"))
+    }
+
     func testFingersRoundTrip() throws {
         // Two fingered notes in one chord, plus a note without a finger, in both file formats.
         let song = Song(title: "Fingers", notes: [
@@ -77,6 +151,32 @@ final class MIDIFileTests: XCTestCase {
         XCTAssertEqual(parallel.map(\.finger), [5, 1])
         // Pairs: the left hand starts at bar 9.
         XCTAssertEqual(FingerPractice.pairs.song.notes.first { $0.hand == .left }?.startBeat, 32)
+    }
+
+    func testHandsPractices() {
+        XCTAssertEqual(HandsPractice.allCases.map(\.name),
+                       ["Hands 1 · Taking turns", "Hands 2 · One hand holds", "Hands 3 · Two against one",
+                        "Hands 4 · Different shapes", "Hands 5 · Off the beat", "Hands 6 · Eighths against quarters"])
+        for practice in HandsPractice.allCases {
+            let song = practice.song
+            XCTAssertEqual((song.durationBeats / 4).rounded(.up), 16, "\(practice): 16 bars")
+            XCTAssertTrue(song.notes.allSatisfy { $0.finger != nil }, "\(practice): every note has a finger")
+            XCTAssertFalse(song.notes.contains { NoteName.isBlackKey($0.pitch) }, "\(practice): white keys only")
+            XCTAssertTrue(song.notes.contains { $0.hand == .left } && song.notes.contains { $0.hand == .right })
+        }
+        // Taking turns: the hands start a note at the same time only in the last bar.
+        let turns = HandsPractice.turns.song.notes
+        let rightStarts = Set(turns.filter { $0.hand == .right }.map(\.startBeat))
+        XCTAssertEqual(Set(turns.filter { $0.hand == .left }.map(\.startBeat)).intersection(rightStarts), [60])
+        // Off the beat: the left hand comes in on beat 2 (a rest first); the swapped half starts at bar 9.
+        let offBeat = HandsPractice.offTheBeat.song.notes
+        XCTAssertEqual(offBeat.first { $0.hand == .left }?.startBeat, 1)
+        XCTAssertEqual(offBeat.filter { $0.startBeat == 32 }.map(\.hand), [.left])
+        // Swapped half: the same note names, an octave apart (bar 1 right C4 → bar 9 left C3).
+        let holding = HandsPractice.holding.song.notes
+        XCTAssertEqual(holding.filter { $0.startBeat == 32 }.map(\.pitch), [48, 60])
+        XCTAssertEqual(holding.filter { $0.startBeat == 32 && $0.hand == .left }.first?.durationBeats ?? 0, 0.95,
+                       accuracy: 0.001, "left hand plays the quarters")
     }
 
     func testRunningStatusVelocityZeroAndSingleTrackHandSplit() throws {
@@ -215,24 +315,63 @@ final class SongProgressTests: XCTestCase {
         XCTAssertFalse(progress.isCompleted)
         XCTAssertFalse(progress.isDifficult)
 
-        progress.recordAbandoned(mistakes: 0)
+        progress.recordAbandoned(mistakes: 0, notes: 40)
         XCTAssertNil(progress.mistakes, "leaving without a mistake records nothing")
-        progress.recordAbandoned(mistakes: 6)
+        progress.recordAbandoned(mistakes: 6, notes: 40)
         XCTAssertTrue(progress.isDifficult)
         XCTAssertFalse(progress.isCompleted)
 
-        progress.recordCompleted(mistakes: 2)
+        progress.recordCompleted(mistakes: 2, notes: 40)
         XCTAssertTrue(progress.isCompleted)
         XCTAssertFalse(progress.isDifficult, "finishing with few mistakes clears the mark")
-        progress.recordAbandoned(mistakes: 1)
+        progress.recordAbandoned(mistakes: 1, notes: 40)
         XCTAssertEqual(progress.mistakes, 2, "an unfinished attempt only raises the count")
 
-        progress.recordCompleted(mistakes: 5)
+        progress.recordCompleted(mistakes: 4, notes: 40)
         XCTAssertEqual(progress.timesCompleted, 2)
-        XCTAssertTrue(progress.isDifficult)
+        XCTAssertFalse(progress.isDifficult, "10% of the notes is still fine")
+        progress.recordCompleted(mistakes: 5, notes: 40)
+        XCTAssertTrue(progress.isDifficult, "more than 10% of the notes is difficult")
+        progress.recordCompleted(mistakes: 5, notes: 200)
+        XCTAssertFalse(progress.isDifficult, "the limit grows with the song")
 
         let decoded = try JSONDecoder().decode(SongProgress.self, from: JSONEncoder().encode(progress))
         XCTAssertEqual(decoded, progress)
+    }
+
+    func testMarkIsSavedAndOldDataStillLoads() throws {
+        var progress = SongProgress()
+        progress.mark = .interesting
+        progress.recordCompleted(mistakes: 7, notes: 40)
+        XCTAssertEqual(progress.mark, .interesting, "playing doesn't change the user's mark")
+        let decoded = try JSONDecoder().decode(SongProgress.self, from: JSONEncoder().encode(progress))
+        XCTAssertEqual(decoded.mark, .interesting)
+
+        let old = try JSONDecoder().decode(SongProgress.self, from: Data(#"{"timesCompleted":1,"mistakes":2}"#.utf8))
+        XCTAssertNil(old.mark)
+        XCTAssertEqual(old.timesCompleted, 1)
+        XCTAssertNil(old.notes)
+        let oldDifficult = try JSONDecoder().decode(SongProgress.self, from: Data(#"{"timesCompleted":1,"mistakes":5}"#.utf8))
+        XCTAssertTrue(oldDifficult.isDifficult, "without a note count the old fixed limit of 5 applies")
+    }
+}
+
+final class PracticeResultTests: XCTestCase {
+    func testGradeIsAShareOfTheNotes() {
+        XCTAssertEqual(PracticeResult(timed: false, total: 20, wrong: 0).grade, .perfect)
+        XCTAssertEqual(PracticeResult(timed: false, total: 20, wrong: 2).grade, .almost)
+        XCTAssertTrue(PracticeResult(timed: false, total: 20, wrong: 2).grade.passed)
+        XCTAssertEqual(PracticeResult(timed: false, total: 20, wrong: 3).grade, .needsPractice)
+        XCTAssertEqual(PracticeResult(timed: false, total: 100, wrong: 10).grade, .almost)
+        XCTAssertEqual(PracticeResult(timed: false, total: 100, wrong: 11).grade, .needsPractice)
+
+        let timed = PracticeResult(timed: true, total: 30, wrong: 2, missed: 2)
+        XCTAssertEqual(timed.mistakes, 4, "missed notes count as mistakes in timed mode")
+        XCTAssertEqual(timed.played, 28)
+        XCTAssertFalse(timed.grade.passed)
+        var progress = SongProgress()
+        progress.recordCompleted(mistakes: timed.mistakes, notes: timed.total)
+        XCTAssertTrue(progress.isDifficult, "needs practice is the same run that marks the song difficult")
     }
 }
 
@@ -291,5 +430,56 @@ final class StaffLayoutTests: XCTestCase {
         XCTAssertEqual(engine.noteStates, [0: .missed, 1: .played])
         _ = engine.noteOn(48)
         XCTAssertEqual(engine.noteStates, [0: .played, 1: .played, 2: .next])
+    }
+}
+
+final class TimedModeTests: XCTestCase {
+    private let notes = [
+        NoteEvent(id: 0, pitch: 60, startBeat: 0, durationBeats: 1, velocity: 80),
+        NoteEvent(id: 1, pitch: 64, startBeat: 0, durationBeats: 1, velocity: 80),
+        NoteEvent(id: 2, pitch: 62, startBeat: 1, durationBeats: 1, velocity: 80),
+        NoteEvent(id: 3, pitch: 62, startBeat: 1.5, durationBeats: 1, velocity: 80),
+        NoteEvent(id: 4, pitch: 67, startBeat: 3, durationBeats: 1, velocity: 80),
+    ]
+
+    func testHitsMissesAndWrongNotes() {
+        var engine = TimedModeEngine(steps: PracticeSteps.make(from: notes), early: 0.5, late: 0.5, startBeat: -4)
+        XCTAssertEqual(engine.noteOn(60), .wrong(pitch: 60), "too early, during the count-in")
+        engine.advance(to: -0.4)
+        XCTAssertEqual(engine.noteOn(60), .hit(noteID: 0), "a little early is fine")
+        XCTAssertEqual(engine.noteStates[1], .next)
+        engine.advance(to: 0.6)
+        XCTAssertEqual(engine.missedNotes, [1], "the other chord note was never played")
+        XCTAssertEqual(engine.judgedCount, 1)
+        engine.advance(to: 1.3)
+        XCTAssertEqual(engine.noteOn(62), .hit(noteID: 3), "the closer of two D's")
+        XCTAssertEqual(engine.noteOn(62), .hit(noteID: 2), "then the other one")
+        XCTAssertEqual(engine.noteOn(62), .wrong(pitch: 62), "no D left in the window")
+        XCTAssertEqual(engine.keyStates, [60: .correct, 62: .wrong], "held keys keep their last verdict")
+        engine.noteOff(62)
+        engine.advance(to: 10)
+        XCTAssertTrue(engine.isFinished)
+        XCTAssertEqual(engine.missedNotes, [1, 4])
+        XCTAssertEqual(engine.wrongCount, 2)
+        XCTAssertEqual(engine.noteStates, [0: .played, 1: .missed, 2: .played, 3: .played, 4: .missed])
+        XCTAssertEqual(engine.noteCount, 5)
+    }
+
+    func testLateSideIsWider() {
+        var engine = TimedModeEngine(steps: PracticeSteps.make(from: notes), startBeat: -4)
+        engine.advance(to: -0.6)
+        XCTAssertEqual(engine.noteOn(60), .wrong(pitch: 60), "more than half a beat early")
+        engine.advance(to: 0.7)
+        XCTAssertEqual(engine.noteOn(64), .hit(noteID: 1), "0.7 beats late still counts")
+        engine.advance(to: 0.8)
+        XCTAssertEqual(engine.missedNotes, [0], "judged once the late side has passed")
+    }
+
+    func testPlayheadFollowsTempoAndSpeed() {
+        let song = Song(title: "t", tempoMap: [TempoChange(beat: 0, microsecondsPerQuarter: 500_000),
+                                                TempoChange(beat: 4, microsecondsPerQuarter: 1_000_000)], notes: [])
+        XCTAssertEqual(song.beat(after: 1, from: 0, speed: 1), 2, "120 BPM")
+        XCTAssertEqual(song.beat(after: 1, from: -4, speed: 0.5), -3, "count-in uses the first tempo, at half speed")
+        XCTAssertEqual(song.beat(after: 1, from: 5, speed: 1), 6, "60 BPM after beat 4")
     }
 }

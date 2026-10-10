@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-10-07 (session 10: completed and difficult marks in the song list)
+Last updated: 2026-10-09 (session 17: notes went to the wrong mode after switching Wait/Timed; switch missing on the Mac)
 
 ## Where we are
 
@@ -83,17 +83,116 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   song by `SongLibrary` in UserDefaults (`songProgress`, JSON keyed by path inside SampleSongs, or "My Songs/<file>").
   A song played to the end gets a **green check** instead of the note icon and "Completed N×". Wrong notes are recorded when
   the song ends, or when it is left early (Restart / another song) with at least one wrong note; with **5 or more** wrong
-  notes (`SongProgress.difficultMistakes`) the row is **tinted orange** with a warning triangle and "Difficult · N wrong notes".
+  notes (since session 16: **more than 10% of the song's notes**, `SongProgress.isTooMany`) the row is **tinted orange** with a warning triangle and "Difficult · N wrong notes".
   An unfinished attempt can only raise the count, so the mark goes away only by finishing with fewer than 5 mistakes.
   Category folder rows show "x/y completed" and a triangle if a song inside is difficult. The current song's marker is now a
   play icon (was a checkmark, which clashed with "completed"). Deleting an imported song forgets its progress.
   Seen in the simulator with seeded progress and a temporary hook that opened the sheet (removed). 20 tests pass.
   **Not verified:** recording by actually playing a song through; leaving the app mid-song records nothing.
 
+- **User marks** (session 11, user's request): the user can mark a song **Hard** (red flag) or **Interesting**
+  (yellow star) to come back to it later. `SongMark` is stored as `SongProgress.mark` (same UserDefaults JSON; older
+  saved data without it still loads, tested). Set it by **swiping a song row right**, **long-pressing** it (menu:
+  No Mark / Hard / Interesting), or with the **flag button** in the practice toolbar for the open song (the button
+  shows the current mark). Marked songs from everywhere (folders and My Songs) are also listed in a **"Marked"** section
+  at the top of the Songs sheet. Playing never changes the mark; deleting an imported song forgets it. This is separate
+  from the automatic orange "Difficult" (5+ wrong notes). 21 tests pass; seen in the simulator with seeded marks and a
+  temporary hook that opened the sheet (removed). **Not verified:** the swipe, long-press menu and flag button by hand.
+
+- **Timed mode** (session 12, user's request): a **Wait | Timed** switch in the middle of the toolbar (remembered,
+  `@AppStorage("timedMode")`). In timed mode the song doesn't wait: after **Play** there is one bar of metronome clicks
+  (count-in), then the music scrolls continuously past the cursor at the chosen **speed** (stepper, 25–150 % of the song's
+  tempo in 5 % steps, shown with the resulting BPM; `@AppStorage("timedSpeed")`, default 75 %). A **metronome** clicks every
+  quarter-note beat (higher click on beat 1 of the bar). **Pause** stops the music and clicks; Play resumes where it was
+  (no count-in on resume). Each note can be hit from **½ beat early to ¾ beat late** (session 15, after the user found
+  almost every note counted as missed with ±½ beat), and never less than **0.25 s early / 0.4 s late** at fast speeds
+  (`TimedSession.updateWindows`, recomputed when the speed changes); once that window passes,
+  unplayed notes turn **orange (missed)**, played ones green; a key that matches no note in its window counts as **wrong**
+  (red key, red flash). The header shows "Played X of N · missed Y · wrong Z". Chords don't need to be held together here
+  and on-screen keys don't latch. At the end the song is recorded as completed with mistakes = missed + wrong
+  (so 5+ gives the "Difficult" mark); stopping early (Restart, other song, switching mode) records them like wait mode.
+  Logic: `PianoCore/TimedModeEngine.swift` (tested; also `Song.bpm(atBeat:)` / `beat(after:from:speed:)`); app:
+  `TimedSession.swift` (60 Hz clock + engine), `Metronome.swift` (AVAudioEngine, synthesized clicks). 23 tests pass;
+  iOS simulator and Mac Catalyst build; seen in simulator screenshots with a temporary auto-play hook (removed): count-in,
+  scrolling, missed notes turning orange, wrong notes counted.
+  **Fixed in session 17** (user: "wait mode doesn't detect the first note"): after switching Wait ↔ Timed, notes still went to
+  the mode that was on when the screen appeared, so the other mode seemed deaf (wait showed nothing, or timed showed
+  "played 0 · wrong 0"). The `midi.onEvent` closure is a copy of the view and kept the old `timedMode`; it is now made again
+  on every mode change (`PracticeView.installMIDIHandler`). Also, the **Mac title bar doesn't show `.principal` toolbar items**,
+  so the switch was missing in the Catalyst app; there it now sits next to Restart (`modeSwitchPlacement`; iPad keeps it in
+  the middle). Both verified by the user with the real piano (Catalyst), with a temporary MIDI log (removed) showing each note
+  going to the selected mode across Timed → Wait → Timed.
+  **Not verified:** hearing the clicks, the buttons by hand,
+  playing along with the real piano (timing/latency of the half-beat window).
+
+- **Lesson notes** (session 13, user's request): each bundled practice has a short lesson in a Markdown file **next to its
+  `.mid` with the same name** (`Intermediate III/Fingers 2 · Skips.md` for `Fingers 2 · Skips.mid`; `twinkle.md`), so a new
+  level folder just needs `.mid` + `.md` pairs. Picking a song in the Songs sheet opens the note as a sheet (title, scrollable
+  text, **Start Practice** closes it; swipe down also closes); the **book** toolbar button shows it again (pauses timed mode).
+  Not shown when the last song reopens on launch. Format: `# Title`, `## Heading`, `- bullet`, paragraphs, inline
+  `**bold**`; parsed by `PianoCore/PracticeNote.swift` (tested), loaded by `SongLibrary.note(for:)`, drawn by
+  `PracticeNoteView.swift`. Each note picks one point to watch (repeated/held notes, mirrored left-hand fingers, moving
+  position, F#, weak fingers 4-5, skips = thirds, mirror vs parallel). A test checks every sample has a note with a title.
+  25 tests pass; seen in the simulator (Fingers 2 note, with a temporary hook that opened it; removed).
+  **Not verified:** picking a song by hand and the note appearing after the Songs sheet closes. Imported songs have no notes
+  (a `.md` is not imported with the `.mid`).
+- **Music examples in lesson notes** (session 13, user's request: plain text was boring): a fenced ```` ```staff ```` block in
+  a note is drawn as a still grand staff (the practice's `StaffView` with `fitBeats`: no cursor, whole bars fill the width),
+  with finger numbers, **blue highlighted notes** and an optional caption. Inside, one line per hand, e.g.
+  `right: C4/1 E4/3! G4/5:2` / `left: C3/5+G3/1:4` / `time: 3/4` / `caption: …` (`/finger`, `!` highlight, `+` chord,
+  `:beats` length, `r` rest; see `StaffExample` in `PracticeNote.swift`). A block that can't be read shows an orange
+  warning instead; the tests require every bundled note to have at least one readable example. All 11 notes now have
+  1–2 examples taken from the practice's own bars (e.g. the C → F move, F# with finger 3, skips line-to-line).
+  26 tests pass; seen in the simulator ("2. C + F positions (both hands)"). Rests are blank space (the staff can't draw rests).
+
+- **Hand coordination drills** (session 14, user's request: for a player who is fine with each hand alone but not together):
+  `HandsPractice` in `PianoCore/HandsSongs.swift`, six bundled songs in Intermediate III, simplest first, each 16 bars in
+  C position, 4/4, 90 BPM, finger on every note: **Hands 1 · Taking turns** (never together: whole bars, half bars, then
+  single beats; together only on the last note), **2 · One hand holds** (whole note against quarters), **3 · Two against
+  one** (halves against quarters), **4 · Different shapes** (quarters together: repeating C-E-G-E pattern + melody),
+  **5 · Off the beat** (one hand comes in on beat 2 while the other holds), **6 · Eighths against quarters**. Drills 2–6
+  play an 8-bar phrase, then the same notes with the hands swapped (right finger f ↔ left finger 6 − f). Each has a
+  lesson note with staff examples. `PositionSongBuilder` now takes finger 0 as a rest. 27 tests pass; the simulator build
+  bundles all 12 files. **Not verified:** seeing them on screen (couldn't open them without a tap) and playing them by hand.
+
+- **App icon** (session 14, user's request): indigo background, five piano keys with the middle (E) key **green** (the
+  app's "correct" color), a soft beam rising from it to a white eighth note. Source `App/Icon/AppIcon.svg`;
+  `scripts/make-icon.sh` renders it with Quick Look (ImageMagick's own SVG renderer drops gradients) into the asset
+  catalog (`ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon` in `project.yml`; run `xcodegen generate` after pulling).
+  Seen on the simulator home screen; the Catalyst build gets `AppIcon.icns`.
+
+- **Result card** (session 16, user's request): when a song is played to the end (wait or timed mode), a card pops up over
+  the practice screen. **Green** = passed: "Perfect!" (no mistakes, star) or "Well done!" (mistakes up to
+  **10% of the song's notes**, check mark). **Orange** = "Keep practising" (more than 10%; user's choice: a share of the
+  notes, not a fixed number), with a tip (timed: slower speed or wait mode; wait: a few bars at a time). The **Difficult**
+  mark in the song list now uses the same rule (`SongProgress.isTooMany`, `mistakeRatio = 0.1`; the note count is saved
+  with the progress; older saved progress without it keeps the old "5 or more" rule), so the card and the list agree.
+  It shows Notes + Wrong (wait) or Played X of N + Missed + Wrong (timed). **Practice Again** restarts the song;
+  **Close** or tapping outside closes it; it also closes on Restart, mode switch or opening another song.
+  Grading: `PianoCore/PracticeResult.swift` (tested); card: `App/Sources/PracticeResultView.swift`. 29 tests pass;
+  both colors seen in simulator screenshots with a temporary hook (removed). **Not verified:** finishing a song by hand.
+
 **Not yet verified:** running on the real iPad; in-app Bluetooth pairing; the Songs sheet and import picker by hand.
 
 ## Next steps (in order)
 
+0. User to try the result card by finishing a song. Is 10% of the notes the right line between green and
+   orange? Should it play a sound?
+
+0. User to try the Hands 1 → 6 drills (wait mode first, then timed mode slowly). Is the order and step size right?
+   Are 16 bars enough? Possible next drills, only if wanted: left-hand fifths (chords), hands moving to new positions together.
+
+0. User to try the lesson notes: pick a practice in the Songs sheet; is the text the right length and level? Should the
+   note also show on launch, or have a "don't show again"? Should importing a `.mid` also take a `.md` with the same name?
+
+0. User to try timed mode with the real piano (Catalyst build) after the wider window (session 15). If most notes are
+   still missed, the cause isn't the window: check whether the player is consistently late (a note head is drawn ~1.6
+   staff spaces right of the cursor at its exact time, so waiting for it to touch the cursor is late; MIDI/audio delay
+   adds more). Next options: a Strict/Normal/Relaxed setting, or log each hit's timing error. Should missed notes be red instead of orange? Count-in on resume after Pause?
+   Should a timed run with many misses count as "Completed"? Clicks are fired from a 60 Hz timer (up to ~16 ms jitter);
+   schedule them on the audio clock if they sound uneven.
+0. User to try marking songs (swipe right, long-press, or the flag button while practising). Open questions: are two
+   marks enough, or should a song have both / a note? Should the automatic "Difficult" be merged with the "Hard" mark?
 1. User to try the completed/difficult marks: is 5 wrong notes the right threshold (or should it scale with song length)?
    Should there be a way to reset a song's progress?
 2. User to try the positions series (1 → 2 → 3) and the Fingers drills (1 → 4) with the real piano (Catalyst build) and say whether the finger numbers are enough
@@ -103,7 +202,7 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
    more bundled samples.
 3. Staff view gaps: rests, beams for eighths, dotted notes, flats/key signatures, neighbouring chord notes (seconds)
    overlap, and the notes are spaced by time (not by engraving rules). Add only what the user asks for.
-4. Milestone 3 (piano roll + running clock, play/pause, tempo): **on hold (user's call, 2026-10-06).** Open questions
+4. Milestone 3 (piano roll; the running clock, play/pause and tempo now exist as timed mode on the staff): **on hold (user's call, 2026-10-06).** Open questions
    when it resumes: horizontal roll vs falling notes (the keyboard strip is at the bottom), whether wait mode uses the
    clock to glide between steps, and no scoring while the clock runs freely (that is milestone 5).
 5. Later: switch the app target to Swift 6 (`SWIFT_VERSION` in `project.yml`; core types are already `Sendable`).
@@ -134,6 +233,11 @@ and team are already set up): connect the iPad, turn on Developer Mode, install 
 | 2026-10-06 | Fingering in `.mid` files: a lyric meta event with a single digit 1–5 right before the note-on (same tick, same track). MusicXML (milestone 7) will be the proper source later. |
 | 2026-10-07 | Song categories (levels) for bundled samples = subfolders of SampleSongs; C-F-D positions go in "Intermediate III" (user's call). Imported songs stay flat in "My Songs". |
 | 2026-10-07 | Position practices are a numbered series, each adding one position (1. C, 2. C + F, 3. C + F + D), 8 bars per position (user's call). |
+| 2026-10-08 | User marks: one mark per song, **Hard** or **Interesting** (or none), kept apart from the automatic "Difficult"; marked songs get their own "Marked" section at the top of the Songs sheet. |
+| 2026-10-09 | Timed-mode hit window widened to ½ beat early / ¾ beat late, at least 0.25 s / 0.4 s (user: almost all notes were missed). |
+| 2026-10-08 | Timed mode: speed is a % of the song's tempo (keeps tempo changes); one-bar count-in; metronome on every quarter beat; ±½-beat hit window; missed = orange on the staff; missed + wrong count as mistakes for progress. |
+| 2026-10-09 | Result card at the end of a song: green if mistakes ≤ 10% of the notes, orange if more; the Difficult mark uses the same rule (was a fixed 5). |
+| 2026-10-09 | Lesson notes are Markdown files next to each song (`x.md` for `x.mid`, same level folder), shown after picking the song; closable and scrollable. |
 | 2026-10-06 | Song library: imported `.mid` files are **copied** into the app (Documents/Songs), so they stay if the original moves; the file name is the song title; the last song opens on launch. No database: the folder is the library. |
 
 ## Known issues / caveats
@@ -146,4 +250,9 @@ and team are already set up): connect the iPad, turn on Developer Mode, install 
 - On-screen keys **latch chord notes** (a clicked chord key stays held until the chord is complete), because a mouse can
   only hold one key. Added 2026-10-06 after the simulator got stuck on step 1 (C3+C4). Not yet confirmed by the user.
 - The FP-30X should be paired through the **in-app** Bluetooth screen, not iOS Settings → Bluetooth.
+- Closures stored on objects (like `midi.onEvent`) capture a copy of the view: they see `@State` changes but **not**
+  later `@AppStorage` values. Re-create such a closure when the setting changes (see `installMIDIHandler`), or read state
+  that lives in an object. (Session 17 bug.)
+- To debug MIDI on the Mac, launch the Catalyst app with
+  `open --env NSUnbufferedIO=YES --stdout log.txt --stderr log.txt …/PianoGuide.app` so `print` output reaches the file at once.
 - The parser doesn't support SMPTE time division or format 2 files; it reports a clear error for both.

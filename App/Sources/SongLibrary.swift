@@ -4,7 +4,8 @@ import PianoCore
 /// The songs the user can pick: bundled samples plus `.mid` files imported from the Files app.
 /// Bundled samples in a subfolder of SampleSongs belong to that category (e.g. "Intermediate III").
 /// Imported files are copied into the app's Documents/Songs folder, so they stay after the original moves.
-/// Also keeps each song's `SongProgress` (completed / difficult), saved in UserDefaults.
+/// Also keeps each song's `SongProgress` (completed / difficult, and the user's hard / interesting mark),
+/// saved in UserDefaults.
 final class SongLibrary: ObservableObject {
     struct Category: Identifiable, Hashable {
         let name: String
@@ -47,6 +48,17 @@ final class SongLibrary: ObservableObject {
     func updateProgress(of entry: Entry, _ change: (inout SongProgress) -> Void) {
         change(&progress[entry.progressKey, default: SongProgress()])
         saveProgress()
+    }
+
+    func setMark(_ mark: SongMark?, of entry: Entry) {
+        updateProgress(of: entry) { $0.mark = mark }
+    }
+
+    /// Songs the user marked hard or interesting, from everywhere in the library, by name.
+    var marked: [Entry] {
+        (imported + allSamples)
+            .filter { progress(of: $0).mark != nil }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
     private func saveProgress() {
@@ -112,6 +124,15 @@ final class SongLibrary: ObservableObject {
         // Track names in downloaded files are often just "Piano"; the file name is a better title.
         if !entry.isSample { song.title = entry.name }
         return song
+    }
+
+    /// The lesson note kept next to the song as a Markdown file with the same name ("x.md" for "x.mid"),
+    /// or nil if there is none.
+    func note(for entry: Entry) -> PracticeNote? {
+        let url = entry.url.deletingPathExtension().appendingPathExtension("md")
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        let note = PracticeNote(markdown: text)
+        return note.isEmpty ? nil : note
     }
 
     enum LoadError: LocalizedError {

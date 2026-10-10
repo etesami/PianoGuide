@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- PianoGuide app icon source. Render: scripts/make-icon.sh. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1E1B4B"/>
+      <stop offset="1" stop-color="#4338CA"/>
+    </linearGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4ADE80" stop-opacity="0"/>
+      <stop offset="1" stop-color="#4ADE80" stop-opacity="0.45"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4ADE80"/>
+      <stop offset="1" stop-color="#16A34A"/>
+    </linearGradient>
+    <linearGradient id="white" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E2E8F0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <!-- light rising from the key to play -->
+  <polygon points="380,180 644,180 614,620 410,620" fill="url(#beam)"/>
+  <rect x="0" y="620" width="1024" height="404" fill="#0F172A"/>
+  <!-- white keys C D E F G; E is the next key (green) -->
+  <rect x="6" y="620" width="192" height="420" rx="18" fill="url(#white)"/>
+  <rect x="211" y="620" width="192" height="420" rx="18" fill="url(#white)"/>
+  <rect x="416" y="620" width="192" height="420" rx="18" fill="url(#green)"/>
+  <rect x="621" y="620" width="192" height="420" rx="18" fill="url(#white)"/>
+  <rect x="826" y="620" width="192" height="420" rx="18" fill="url(#white)"/>
+  <!-- black keys C# D# F# -->
+  <rect x="140" y="606" width="128" height="250" rx="14" fill="#0F172A"/>
+  <rect x="345" y="606" width="128" height="250" rx="14" fill="#0F172A"/>
+  <rect x="755" y="606" width="128" height="250" rx="14" fill="#0F172A"/>
+  <!-- key cover -->
+  <rect x="0" y="596" width="1024" height="24" fill="#0F172A"/>
+  <!-- eighth note above the green key -->
+  <g fill="#FFFFFF">
+    <ellipse cx="478" cy="452" rx="84" ry="62" transform="rotate(-22 478 452)"/>
+    <rect x="534" y="150" width="30" height="300" rx="8"/>
+    <path d="M546 150 C 560 240, 700 250, 676 400 C 664 320, 610 290, 546 280 Z"/>
+  </g>
+</svg>
