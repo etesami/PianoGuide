@@ -24,6 +24,7 @@ final class TimedSession: ObservableObject {
         self.song = song
         self.speed = speed
         engine = TimedModeEngine(steps: PracticeSteps.make(from: song.notes), startBeat: -beatsPerBar)
+        updateWindows()
     }
 
     func restart() {
@@ -31,7 +32,19 @@ final class TimedSession: ObservableObject {
         load(song, speed: speed)
     }
 
-    func setSpeed(_ speed: Double) { self.speed = speed }
+    func setSpeed(_ speed: Double) {
+        self.speed = speed
+        updateWindows()
+    }
+
+    /// Hit window: ½ beat early to ¾ beat late, but at fast speeds never shorter than
+    /// 0.25 s early / 0.4 s late, so small timing slips (and MIDI/audio delay) don't count as misses.
+    private func updateWindows() {
+        guard let song else { return }
+        let beatsPerSecond = song.bpm(atBeat: 0) * speed / 60
+        engine.early = max(0.5, 0.25 * beatsPerSecond)
+        engine.late = max(0.75, 0.4 * beatsPerSecond)
+    }
 
     func togglePlay() { isPlaying ? pause() : play() }
 

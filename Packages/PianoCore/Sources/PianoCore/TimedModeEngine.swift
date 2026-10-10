@@ -1,9 +1,10 @@
 import Foundation
 
 /// Timed mode: the song moves on at a fixed speed whether or not the notes are played.
-/// Each note can be hit within `window` beats either side of its start; when the playhead has passed
-/// that window, every note of the step not played is counted as missed. A key that matches no note
-/// in its window is a wrong note. Pure logic, no clock or UI: the app tells it where the playhead is.
+/// Each note can be hit from `early` beats before its start to `late` beats after it (players tend to be
+/// a little behind, so the late side is wider); when the playhead has passed that window, every note of
+/// the step not played is counted as missed. A key that matches no note in its window is a wrong note.
+/// Pure logic, no clock or UI: the app tells it where the playhead is.
 public struct TimedModeEngine: Sendable {
     public enum Feedback: Equatable, Sendable {
         case hit(noteID: Int)
@@ -11,7 +12,10 @@ public struct TimedModeEngine: Sendable {
     }
 
     public let steps: [PracticeStep]
-    public let window: Double
+    /// How early / late (in beats) a note may be played and still count. The app may change them
+    /// (e.g. when the speed changes) so they never get too short in seconds.
+    public var early: Double
+    public var late: Double
     /// The playhead, in beats (negative during the count-in).
     public private(set) var beat: Double
     /// Steps before this index have had their window pass and are judged.
@@ -22,9 +26,10 @@ public struct TimedModeEngine: Sendable {
     private var heldCorrect: Set<UInt8> = []
     private var heldWrong: Set<UInt8> = []
 
-    public init(steps: [PracticeStep], window: Double = 0.5, startBeat: Double = 0) {
+    public init(steps: [PracticeStep], early: Double = 0.5, late: Double = 0.75, startBeat: Double = 0) {
         self.steps = steps
-        self.window = window
+        self.early = early
+        self.late = late
         self.beat = startBeat
     }
 
@@ -35,7 +40,7 @@ public struct TimedModeEngine: Sendable {
     /// Moves the playhead forward and judges every step whose window has passed.
     public mutating func advance(to beat: Double) {
         self.beat = beat
-        while judgedCount < steps.count, steps[judgedCount].startBeat + window < beat {
+        while judgedCount < steps.count, steps[judgedCount].startBeat + late < beat {
             for id in steps[judgedCount].noteIDs where !hitNotes.contains(id) { missedNotes.insert(id) }
             judgedCount += 1
         }
@@ -45,10 +50,10 @@ public struct TimedModeEngine: Sendable {
     public mutating func noteOn(_ pitch: UInt8) -> Feedback {
         var best: (id: Int, distance: Double)?
         for step in steps[judgedCount...] {
-            if step.startBeat - window > beat { break }
+            if step.startBeat - early > beat { break }
             let distance = abs(step.startBeat - beat)
             for (id, notePitch) in zip(step.noteIDs, step.notePitches)
-            where notePitch == pitch && !hitNotes.contains(id) && distance <= window {
+            where notePitch == pitch && !hitNotes.contains(id) && step.startBeat + late >= beat {
                 if best == nil || distance < best!.distance { best = (id, distance) }
             }
         }
@@ -83,7 +88,7 @@ public struct TimedModeEngine: Sendable {
         for id in hitNotes { states[id] = .played }
         for id in missedNotes { states[id] = .missed }
         for step in steps[judgedCount...] {
-            if step.startBeat - window > beat { break }
+            if step.startBeat - early > beat { break }
             for id in step.noteIDs where !hitNotes.contains(id) { states[id] = .next }
         }
         return states

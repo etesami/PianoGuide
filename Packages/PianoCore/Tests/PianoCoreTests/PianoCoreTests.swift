@@ -417,7 +417,7 @@ final class TimedModeTests: XCTestCase {
     ]
 
     func testHitsMissesAndWrongNotes() {
-        var engine = TimedModeEngine(steps: PracticeSteps.make(from: notes), window: 0.5, startBeat: -4)
+        var engine = TimedModeEngine(steps: PracticeSteps.make(from: notes), early: 0.5, late: 0.5, startBeat: -4)
         XCTAssertEqual(engine.noteOn(60), .wrong(pitch: 60), "too early, during the count-in")
         engine.advance(to: -0.4)
         XCTAssertEqual(engine.noteOn(60), .hit(noteID: 0), "a little early is fine")
@@ -437,6 +437,16 @@ final class TimedModeTests: XCTestCase {
         XCTAssertEqual(engine.wrongCount, 2)
         XCTAssertEqual(engine.noteStates, [0: .played, 1: .missed, 2: .played, 3: .played, 4: .missed])
         XCTAssertEqual(engine.noteCount, 5)
+    }
+
+    func testLateSideIsWider() {
+        var engine = TimedModeEngine(steps: PracticeSteps.make(from: notes), startBeat: -4)
+        engine.advance(to: -0.6)
+        XCTAssertEqual(engine.noteOn(60), .wrong(pitch: 60), "more than half a beat early")
+        engine.advance(to: 0.7)
+        XCTAssertEqual(engine.noteOn(64), .hit(noteID: 1), "0.7 beats late still counts")
+        engine.advance(to: 0.8)
+        XCTAssertEqual(engine.missedNotes, [0], "judged once the late side has passed")
     }
 
     func testPlayheadFollowsTempoAndSpeed() {

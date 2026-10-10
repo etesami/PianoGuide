@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-10-09 (session 14: hand coordination drills)
+Last updated: 2026-10-09 (session 15: wider timed-mode hit window)
 
 ## Where we are
 
@@ -104,7 +104,9 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   (count-in), then the music scrolls continuously past the cursor at the chosen **speed** (stepper, 25–150 % of the song's
   tempo in 5 % steps, shown with the resulting BPM; `@AppStorage("timedSpeed")`, default 75 %). A **metronome** clicks every
   quarter-note beat (higher click on beat 1 of the bar). **Pause** stops the music and clicks; Play resumes where it was
-  (no count-in on resume). Each note can be hit within **half a beat** either side of its start; once that window passes,
+  (no count-in on resume). Each note can be hit from **½ beat early to ¾ beat late** (session 15, after the user found
+  almost every note counted as missed with ±½ beat), and never less than **0.25 s early / 0.4 s late** at fast speeds
+  (`TimedSession.updateWindows`, recomputed when the speed changes); once that window passes,
   unplayed notes turn **orange (missed)**, played ones green; a key that matches no note in its window counts as **wrong**
   (red key, red flash). The header shows "Played X of N · missed Y · wrong Z". Chords don't need to be held together here
   and on-screen keys don't latch. At the end the song is recorded as completed with mistakes = missed + wrong
@@ -161,8 +163,10 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
 0. User to try the lesson notes: pick a practice in the Songs sheet; is the text the right length and level? Should the
    note also show on launch, or have a "don't show again"? Should importing a `.mid` also take a `.md` with the same name?
 
-0. User to try timed mode with the real piano (Catalyst build). Open questions: is ±½ beat the right hit window (it gets
-   wider in seconds at slow speeds)? Should missed notes be red instead of orange? Count-in on resume after Pause?
+0. User to try timed mode with the real piano (Catalyst build) after the wider window (session 15). If most notes are
+   still missed, the cause isn't the window: check whether the player is consistently late (a note head is drawn ~1.6
+   staff spaces right of the cursor at its exact time, so waiting for it to touch the cursor is late; MIDI/audio delay
+   adds more). Next options: a Strict/Normal/Relaxed setting, or log each hit's timing error. Should missed notes be red instead of orange? Count-in on resume after Pause?
    Should a timed run with many misses count as "Completed"? Clicks are fired from a 60 Hz timer (up to ~16 ms jitter);
    schedule them on the audio clock if they sound uneven.
 0. User to try marking songs (swipe right, long-press, or the flag button while practising). Open questions: are two
@@ -208,6 +212,7 @@ and team are already set up): connect the iPad, turn on Developer Mode, install 
 | 2026-10-07 | Song categories (levels) for bundled samples = subfolders of SampleSongs; C-F-D positions go in "Intermediate III" (user's call). Imported songs stay flat in "My Songs". |
 | 2026-10-07 | Position practices are a numbered series, each adding one position (1. C, 2. C + F, 3. C + F + D), 8 bars per position (user's call). |
 | 2026-10-08 | User marks: one mark per song, **Hard** or **Interesting** (or none), kept apart from the automatic "Difficult"; marked songs get their own "Marked" section at the top of the Songs sheet. |
+| 2026-10-09 | Timed-mode hit window widened to ½ beat early / ¾ beat late, at least 0.25 s / 0.4 s (user: almost all notes were missed). |
 | 2026-10-08 | Timed mode: speed is a % of the song's tempo (keeps tempo changes); one-bar count-in; metronome on every quarter beat; ±½-beat hit window; missed = orange on the staff; missed + wrong count as mistakes for progress. |
 | 2026-10-09 | Lesson notes are Markdown files next to each song (`x.md` for `x.mid`, same level folder), shown after picking the song; closable and scrollable. |
 | 2026-10-06 | Song library: imported `.mid` files are **copied** into the app (Documents/Songs), so they stay if the original moves; the file name is the song title; the last song opens on launch. No database: the folder is the library. |
