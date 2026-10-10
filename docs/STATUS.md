@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-10-09 (session 13: lesson notes before each practice)
+Last updated: 2026-10-09 (session 14: hand coordination drills)
 
 ## Where we are
 
@@ -135,9 +135,28 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   1–2 examples taken from the practice's own bars (e.g. the C → F move, F# with finger 3, skips line-to-line).
   26 tests pass; seen in the simulator ("2. C + F positions (both hands)"). Rests are blank space (the staff can't draw rests).
 
+- **Hand coordination drills** (session 14, user's request: for a player who is fine with each hand alone but not together):
+  `HandsPractice` in `PianoCore/HandsSongs.swift`, six bundled songs in Intermediate III, simplest first, each 16 bars in
+  C position, 4/4, 90 BPM, finger on every note: **Hands 1 · Taking turns** (never together: whole bars, half bars, then
+  single beats; together only on the last note), **2 · One hand holds** (whole note against quarters), **3 · Two against
+  one** (halves against quarters), **4 · Different shapes** (quarters together: repeating C-E-G-E pattern + melody),
+  **5 · Off the beat** (one hand comes in on beat 2 while the other holds), **6 · Eighths against quarters**. Drills 2–6
+  play an 8-bar phrase, then the same notes with the hands swapped (right finger f ↔ left finger 6 − f). Each has a
+  lesson note with staff examples. `PositionSongBuilder` now takes finger 0 as a rest. 27 tests pass; the simulator build
+  bundles all 12 files. **Not verified:** seeing them on screen (couldn't open them without a tap) and playing them by hand.
+
+- **App icon** (session 14, user's request): indigo background, five piano keys with the middle (E) key **green** (the
+  app's "correct" color), a soft beam rising from it to a white eighth note. Source `App/Icon/AppIcon.svg`;
+  `scripts/make-icon.sh` renders it with Quick Look (ImageMagick's own SVG renderer drops gradients) into the asset
+  catalog (`ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon` in `project.yml`; run `xcodegen generate` after pulling).
+  Seen on the simulator home screen; the Catalyst build gets `AppIcon.icns`.
+
 **Not yet verified:** running on the real iPad; in-app Bluetooth pairing; the Songs sheet and import picker by hand.
 
 ## Next steps (in order)
+
+0. User to try the Hands 1 → 6 drills (wait mode first, then timed mode slowly). Is the order and step size right?
+   Are 16 bars enough? Possible next drills, only if wanted: left-hand fifths (chords), hands moving to new positions together.
 
 0. User to try the lesson notes: pick a practice in the Songs sheet; is the text the right length and level? Should the
    note also show on launch, or have a "don't show again"? Should importing a `.mid` also take a `.md` with the same name?

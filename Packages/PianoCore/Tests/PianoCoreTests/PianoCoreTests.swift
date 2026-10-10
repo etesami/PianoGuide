@@ -153,6 +153,32 @@ final class MIDIFileTests: XCTestCase {
         XCTAssertEqual(FingerPractice.pairs.song.notes.first { $0.hand == .left }?.startBeat, 32)
     }
 
+    func testHandsPractices() {
+        XCTAssertEqual(HandsPractice.allCases.map(\.name),
+                       ["Hands 1 · Taking turns", "Hands 2 · One hand holds", "Hands 3 · Two against one",
+                        "Hands 4 · Different shapes", "Hands 5 · Off the beat", "Hands 6 · Eighths against quarters"])
+        for practice in HandsPractice.allCases {
+            let song = practice.song
+            XCTAssertEqual((song.durationBeats / 4).rounded(.up), 16, "\(practice): 16 bars")
+            XCTAssertTrue(song.notes.allSatisfy { $0.finger != nil }, "\(practice): every note has a finger")
+            XCTAssertFalse(song.notes.contains { NoteName.isBlackKey($0.pitch) }, "\(practice): white keys only")
+            XCTAssertTrue(song.notes.contains { $0.hand == .left } && song.notes.contains { $0.hand == .right })
+        }
+        // Taking turns: the hands start a note at the same time only in the last bar.
+        let turns = HandsPractice.turns.song.notes
+        let rightStarts = Set(turns.filter { $0.hand == .right }.map(\.startBeat))
+        XCTAssertEqual(Set(turns.filter { $0.hand == .left }.map(\.startBeat)).intersection(rightStarts), [60])
+        // Off the beat: the left hand comes in on beat 2 (a rest first); the swapped half starts at bar 9.
+        let offBeat = HandsPractice.offTheBeat.song.notes
+        XCTAssertEqual(offBeat.first { $0.hand == .left }?.startBeat, 1)
+        XCTAssertEqual(offBeat.filter { $0.startBeat == 32 }.map(\.hand), [.left])
+        // Swapped half: the same note names, an octave apart (bar 1 right C4 → bar 9 left C3).
+        let holding = HandsPractice.holding.song.notes
+        XCTAssertEqual(holding.filter { $0.startBeat == 32 }.map(\.pitch), [48, 60])
+        XCTAssertEqual(holding.filter { $0.startBeat == 32 && $0.hand == .left }.first?.durationBeats ?? 0, 0.95,
+                       accuracy: 0.001, "left hand plays the quarters")
+    }
+
     func testRunningStatusVelocityZeroAndSingleTrackHandSplit() throws {
         // Format 0, 96 ticks per quarter; C4 then G3 using running status.
         let track: [UInt8] = [

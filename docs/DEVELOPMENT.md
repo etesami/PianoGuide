@@ -10,6 +10,7 @@
 ```sh
 scripts/check-core.sh                                   # = (cd Packages/PianoCore && swift test)
 scripts/check-core.sh --write-samples App/Resources/SampleSongs   # regenerate sample .mid files
+scripts/make-icon.sh                                               # redraw the app icon from App/Icon/AppIcon.svg
 scripts/check-core.sh --write-test-songs TestSongs                # regenerate the import test songs
 ```
 
@@ -105,6 +106,7 @@ Bluetooth also works on the Mac: pair the piano in Audio MIDI Setup → MIDI Stu
 | `…/SongProgress.swift` | Per-song progress: times completed, recent wrong notes, "difficult" rule (5+ wrong notes); the user's own `SongMark` (hard / interesting) |
 | `…/PracticeNote.swift` | Lesson note parsed from a small Markdown subset (title, headings, bullets, paragraphs) and `StaffExample` (```` ```staff ```` music examples) |
 | `App/Resources/SampleSongs/<level>/x.md` | Lesson note for `x.mid`, shown when the song is picked |
+| `App/Icon/AppIcon.svg` | App icon source; `scripts/make-icon.sh` writes `App/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png` (one 1024 px image; Xcode makes the iPad and Mac sizes) |
 | `App/Sources/PracticeNoteView.swift` | Sheet showing a lesson note (scrolls; "Start Practice" closes it) |
 | `App/Sources/MIDIInputService.swift` | CoreMIDI: connects all sources and publishes note on/off (also simulated events) |
 | `App/Sources/BluetoothMIDIPairingView.swift` | Wraps `CABTMIDICentralViewController` |
