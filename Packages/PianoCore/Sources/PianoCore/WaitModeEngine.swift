@@ -61,6 +61,7 @@ public struct WaitModeEngine: Sendable {
     }
 
     public var isFinished: Bool { currentIndex >= steps.count }
+    public var noteCount: Int { steps.reduce(0) { $0 + $1.noteIDs.count } }
 
     public mutating func noteOn(_ pitch: UInt8) -> Feedback {
         guard let step = currentStep else { return .finished }

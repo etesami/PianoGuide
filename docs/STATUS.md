@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-10-09 (session 15: wider timed-mode hit window)
+Last updated: 2026-10-09 (session 16: result card at the end of a song)
 
 ## Where we are
 
@@ -83,7 +83,7 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   song by `SongLibrary` in UserDefaults (`songProgress`, JSON keyed by path inside SampleSongs, or "My Songs/<file>").
   A song played to the end gets a **green check** instead of the note icon and "Completed N×". Wrong notes are recorded when
   the song ends, or when it is left early (Restart / another song) with at least one wrong note; with **5 or more** wrong
-  notes (`SongProgress.difficultMistakes`) the row is **tinted orange** with a warning triangle and "Difficult · N wrong notes".
+  notes (since session 16: **more than 10% of the song's notes**, `SongProgress.isTooMany`) the row is **tinted orange** with a warning triangle and "Difficult · N wrong notes".
   An unfinished attempt can only raise the count, so the mark goes away only by finishing with fewer than 5 mistakes.
   Category folder rows show "x/y completed" and a triangle if a song inside is difficult. The current song's marker is now a
   play icon (was a checkmark, which clashed with "completed"). Deleting an imported song forgets its progress.
@@ -153,9 +153,23 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   catalog (`ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon` in `project.yml`; run `xcodegen generate` after pulling).
   Seen on the simulator home screen; the Catalyst build gets `AppIcon.icns`.
 
+- **Result card** (session 16, user's request): when a song is played to the end (wait or timed mode), a card pops up over
+  the practice screen. **Green** = passed: "Perfect!" (no mistakes, star) or "Well done!" (mistakes up to
+  **10% of the song's notes**, check mark). **Orange** = "Keep practising" (more than 10%; user's choice: a share of the
+  notes, not a fixed number), with a tip (timed: slower speed or wait mode; wait: a few bars at a time). The **Difficult**
+  mark in the song list now uses the same rule (`SongProgress.isTooMany`, `mistakeRatio = 0.1`; the note count is saved
+  with the progress; older saved progress without it keeps the old "5 or more" rule), so the card and the list agree.
+  It shows Notes + Wrong (wait) or Played X of N + Missed + Wrong (timed). **Practice Again** restarts the song;
+  **Close** or tapping outside closes it; it also closes on Restart, mode switch or opening another song.
+  Grading: `PianoCore/PracticeResult.swift` (tested); card: `App/Sources/PracticeResultView.swift`. 29 tests pass;
+  both colors seen in simulator screenshots with a temporary hook (removed). **Not verified:** finishing a song by hand.
+
 **Not yet verified:** running on the real iPad; in-app Bluetooth pairing; the Songs sheet and import picker by hand.
 
 ## Next steps (in order)
+
+0. User to try the result card by finishing a song. Is 10% of the notes the right line between green and
+   orange? Should it play a sound?
 
 0. User to try the Hands 1 → 6 drills (wait mode first, then timed mode slowly). Is the order and step size right?
    Are 16 bars enough? Possible next drills, only if wanted: left-hand fifths (chords), hands moving to new positions together.
@@ -214,6 +228,7 @@ and team are already set up): connect the iPad, turn on Developer Mode, install 
 | 2026-10-08 | User marks: one mark per song, **Hard** or **Interesting** (or none), kept apart from the automatic "Difficult"; marked songs get their own "Marked" section at the top of the Songs sheet. |
 | 2026-10-09 | Timed-mode hit window widened to ½ beat early / ¾ beat late, at least 0.25 s / 0.4 s (user: almost all notes were missed). |
 | 2026-10-08 | Timed mode: speed is a % of the song's tempo (keeps tempo changes); one-bar count-in; metronome on every quarter beat; ±½-beat hit window; missed = orange on the staff; missed + wrong count as mistakes for progress. |
+| 2026-10-09 | Result card at the end of a song: green if mistakes ≤ 10% of the notes, orange if more; the Difficult mark uses the same rule (was a fixed 5). |
 | 2026-10-09 | Lesson notes are Markdown files next to each song (`x.md` for `x.mid`, same level folder), shown after picking the song; closable and scrollable. |
 | 2026-10-06 | Song library: imported `.mid` files are **copied** into the app (Documents/Songs), so they stay if the original moves; the file name is the song title; the last song opens on launch. No database: the folder is the library. |
 

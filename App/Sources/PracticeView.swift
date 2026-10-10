@@ -29,6 +29,8 @@ struct PracticeView: View {
     /// Timed mode's speed as a fraction of the song's own tempo.
     @AppStorage("timedSpeed") private var speed = 0.75
     @StateObject private var timed = TimedSession()
+    /// Shown as a card over the screen when a song has been played to the end.
+    @State private var result: PracticeResult?
 
     var body: some View {
         NavigationStack {
@@ -46,13 +48,21 @@ struct PracticeView: View {
             }
             .padding()
             .background(flash.opacity(0.15).animation(.easeOut(duration: 0.3), value: flash))
+            .overlay {
+                if let result {
+                    PracticeResultView(result: result,
+                                       onAgain: { closeResult(); engine.reset(); timed.restart() },
+                                       onClose: closeResult)
+                }
+            }
+            .animation(.spring(duration: 0.35), value: result)
             .navigationTitle(song?.title ?? "PianoGuide")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { timed.pause(); showLibrary = true } label: { Label("Songs", systemImage: "music.note.list") }
                 }
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Restart") { releaseLatched(); recordAbandoned(); engine.reset(); timed.restart() }
+                    Button("Restart") { closeResult(); releaseLatched(); recordAbandoned(); engine.reset(); timed.restart() }
                 }
                 ToolbarItem(placement: .principal) {
                     Picker("Mode", selection: $timedMode) {
@@ -103,6 +113,7 @@ struct PracticeView: View {
         }
         .onAppear(perform: load)
         .onChange(of: timedMode) { wasTimed, _ in
+            closeResult()
             releaseLatched()
             recordAbandoned(timed: wasTimed)
             engine.reset()
@@ -206,8 +217,8 @@ struct PracticeView: View {
                 case .wrong: flash = .red
                 case .stepCompleted:
                     flash = .green
-                    if engine.isFinished, let songEntry {
-                        library.updateProgress(of: songEntry) { $0.recordCompleted(mistakes: engine.wrongCount) }
+                    if engine.isFinished {
+                        finish(PracticeResult(timed: false, total: engine.noteCount, wrong: engine.wrongCount))
                     }
                     DispatchQueue.main.async(execute: releaseLatched)
                 default: break
@@ -219,9 +230,7 @@ struct PracticeView: View {
         }
         timed.onFinished = {
             let e = timed.engine
-            if let songEntry {
-                library.updateProgress(of: songEntry) { $0.recordCompleted(mistakes: e.wrongCount + e.missedCount) }
-            }
+            finish(PracticeResult(timed: true, total: e.noteCount, wrong: e.wrongCount, missed: e.missedCount))
         }
         guard song == nil else { return }
         let all = library.imported + library.allSamples
@@ -232,6 +241,16 @@ struct PracticeView: View {
         open(entry)
     }
 
+    /// The song was played to the end: record it and show the result card.
+    private func finish(_ finished: PracticeResult) {
+        if let songEntry {
+            library.updateProgress(of: songEntry) { $0.recordCompleted(mistakes: finished.mistakes, notes: finished.total) }
+        }
+        result = finished
+    }
+
+    private func closeResult() { result = nil }
+
     /// Leaving a song before the end still counts its wrong notes towards the difficult mark.
     /// In timed mode, missed notes count as mistakes too.
     private func recordAbandoned() { recordAbandoned(timed: timedMode) }
@@ -240,15 +259,16 @@ struct PracticeView: View {
         guard let songEntry else { return }
         let e = timed.engine
         if isTimed, timed.hasStarted, !e.isFinished {
-            library.updateProgress(of: songEntry) { $0.recordAbandoned(mistakes: e.wrongCount + e.missedCount) }
+            library.updateProgress(of: songEntry) { $0.recordAbandoned(mistakes: e.wrongCount + e.missedCount, notes: e.noteCount) }
         } else if !isTimed, !engine.isFinished {
-            library.updateProgress(of: songEntry) { $0.recordAbandoned(mistakes: engine.wrongCount) }
+            library.updateProgress(of: songEntry) { $0.recordAbandoned(mistakes: engine.wrongCount, notes: engine.noteCount) }
         }
     }
 
     private func open(_ entry: SongLibrary.Entry) {
         do {
             let loaded = try library.load(entry)
+            closeResult()
             releaseLatched()
             recordAbandoned()
             song = loaded

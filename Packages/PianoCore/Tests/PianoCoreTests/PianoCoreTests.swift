@@ -315,21 +315,25 @@ final class SongProgressTests: XCTestCase {
         XCTAssertFalse(progress.isCompleted)
         XCTAssertFalse(progress.isDifficult)
 
-        progress.recordAbandoned(mistakes: 0)
+        progress.recordAbandoned(mistakes: 0, notes: 40)
         XCTAssertNil(progress.mistakes, "leaving without a mistake records nothing")
-        progress.recordAbandoned(mistakes: 6)
+        progress.recordAbandoned(mistakes: 6, notes: 40)
         XCTAssertTrue(progress.isDifficult)
         XCTAssertFalse(progress.isCompleted)
 
-        progress.recordCompleted(mistakes: 2)
+        progress.recordCompleted(mistakes: 2, notes: 40)
         XCTAssertTrue(progress.isCompleted)
         XCTAssertFalse(progress.isDifficult, "finishing with few mistakes clears the mark")
-        progress.recordAbandoned(mistakes: 1)
+        progress.recordAbandoned(mistakes: 1, notes: 40)
         XCTAssertEqual(progress.mistakes, 2, "an unfinished attempt only raises the count")
 
-        progress.recordCompleted(mistakes: 5)
+        progress.recordCompleted(mistakes: 4, notes: 40)
         XCTAssertEqual(progress.timesCompleted, 2)
-        XCTAssertTrue(progress.isDifficult)
+        XCTAssertFalse(progress.isDifficult, "10% of the notes is still fine")
+        progress.recordCompleted(mistakes: 5, notes: 40)
+        XCTAssertTrue(progress.isDifficult, "more than 10% of the notes is difficult")
+        progress.recordCompleted(mistakes: 5, notes: 200)
+        XCTAssertFalse(progress.isDifficult, "the limit grows with the song")
 
         let decoded = try JSONDecoder().decode(SongProgress.self, from: JSONEncoder().encode(progress))
         XCTAssertEqual(decoded, progress)
@@ -338,7 +342,7 @@ final class SongProgressTests: XCTestCase {
     func testMarkIsSavedAndOldDataStillLoads() throws {
         var progress = SongProgress()
         progress.mark = .interesting
-        progress.recordCompleted(mistakes: 7)
+        progress.recordCompleted(mistakes: 7, notes: 40)
         XCTAssertEqual(progress.mark, .interesting, "playing doesn't change the user's mark")
         let decoded = try JSONDecoder().decode(SongProgress.self, from: JSONEncoder().encode(progress))
         XCTAssertEqual(decoded.mark, .interesting)
@@ -346,6 +350,28 @@ final class SongProgressTests: XCTestCase {
         let old = try JSONDecoder().decode(SongProgress.self, from: Data(#"{"timesCompleted":1,"mistakes":2}"#.utf8))
         XCTAssertNil(old.mark)
         XCTAssertEqual(old.timesCompleted, 1)
+        XCTAssertNil(old.notes)
+        let oldDifficult = try JSONDecoder().decode(SongProgress.self, from: Data(#"{"timesCompleted":1,"mistakes":5}"#.utf8))
+        XCTAssertTrue(oldDifficult.isDifficult, "without a note count the old fixed limit of 5 applies")
+    }
+}
+
+final class PracticeResultTests: XCTestCase {
+    func testGradeIsAShareOfTheNotes() {
+        XCTAssertEqual(PracticeResult(timed: false, total: 20, wrong: 0).grade, .perfect)
+        XCTAssertEqual(PracticeResult(timed: false, total: 20, wrong: 2).grade, .almost)
+        XCTAssertTrue(PracticeResult(timed: false, total: 20, wrong: 2).grade.passed)
+        XCTAssertEqual(PracticeResult(timed: false, total: 20, wrong: 3).grade, .needsPractice)
+        XCTAssertEqual(PracticeResult(timed: false, total: 100, wrong: 10).grade, .almost)
+        XCTAssertEqual(PracticeResult(timed: false, total: 100, wrong: 11).grade, .needsPractice)
+
+        let timed = PracticeResult(timed: true, total: 30, wrong: 2, missed: 2)
+        XCTAssertEqual(timed.mistakes, 4, "missed notes count as mistakes in timed mode")
+        XCTAssertEqual(timed.played, 28)
+        XCTAssertFalse(timed.grade.passed)
+        var progress = SongProgress()
+        progress.recordCompleted(mistakes: timed.mistakes, notes: timed.total)
+        XCTAssertTrue(progress.isDifficult, "needs practice is the same run that marks the song difficult")
     }
 }
 
