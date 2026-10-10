@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-10-09 (session 16: result card at the end of a song)
+Last updated: 2026-10-09 (session 17: notes went to the wrong mode after switching Wait/Timed; switch missing on the Mac)
 
 ## Where we are
 
@@ -114,7 +114,15 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   Logic: `PianoCore/TimedModeEngine.swift` (tested; also `Song.bpm(atBeat:)` / `beat(after:from:speed:)`); app:
   `TimedSession.swift` (60 Hz clock + engine), `Metronome.swift` (AVAudioEngine, synthesized clicks). 23 tests pass;
   iOS simulator and Mac Catalyst build; seen in simulator screenshots with a temporary auto-play hook (removed): count-in,
-  scrolling, missed notes turning orange, wrong notes counted. **Not verified:** hearing the clicks, the buttons by hand,
+  scrolling, missed notes turning orange, wrong notes counted.
+  **Fixed in session 17** (user: "wait mode doesn't detect the first note"): after switching Wait ↔ Timed, notes still went to
+  the mode that was on when the screen appeared, so the other mode seemed deaf (wait showed nothing, or timed showed
+  "played 0 · wrong 0"). The `midi.onEvent` closure is a copy of the view and kept the old `timedMode`; it is now made again
+  on every mode change (`PracticeView.installMIDIHandler`). Also, the **Mac title bar doesn't show `.principal` toolbar items**,
+  so the switch was missing in the Catalyst app; there it now sits next to Restart (`modeSwitchPlacement`; iPad keeps it in
+  the middle). Both verified by the user with the real piano (Catalyst), with a temporary MIDI log (removed) showing each note
+  going to the selected mode across Timed → Wait → Timed.
+  **Not verified:** hearing the clicks, the buttons by hand,
   playing along with the real piano (timing/latency of the half-beat window).
 
 - **Lesson notes** (session 13, user's request): each bundled practice has a short lesson in a Markdown file **next to its
@@ -242,4 +250,9 @@ and team are already set up): connect the iPad, turn on Developer Mode, install 
 - On-screen keys **latch chord notes** (a clicked chord key stays held until the chord is complete), because a mouse can
   only hold one key. Added 2026-10-06 after the simulator got stuck on step 1 (C3+C4). Not yet confirmed by the user.
 - The FP-30X should be paired through the **in-app** Bluetooth screen, not iOS Settings → Bluetooth.
+- Closures stored on objects (like `midi.onEvent`) capture a copy of the view: they see `@State` changes but **not**
+  later `@AppStorage` values. Re-create such a closure when the setting changes (see `installMIDIHandler`), or read state
+  that lives in an object. (Session 17 bug.)
+- To debug MIDI on the Mac, launch the Catalyst app with
+  `open --env NSUnbufferedIO=YES --stdout log.txt --stderr log.txt …/PianoGuide.app` so `print` output reaches the file at once.
 - The parser doesn't support SMPTE time division or format 2 files; it reports a clear error for both.

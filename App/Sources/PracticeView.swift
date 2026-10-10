@@ -64,7 +64,7 @@ struct PracticeView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Restart") { closeResult(); releaseLatched(); recordAbandoned(); engine.reset(); timed.restart() }
                 }
-                ToolbarItem(placement: .principal) {
+                ToolbarItem(placement: modeSwitchPlacement) {
                     Picker("Mode", selection: $timedMode) {
                         Text("Wait").tag(false)
                         Text("Timed").tag(true)
@@ -113,6 +113,7 @@ struct PracticeView: View {
         }
         .onAppear(perform: load)
         .onChange(of: timedMode) { wasTimed, _ in
+            installMIDIHandler()
             closeResult()
             releaseLatched()
             recordAbandoned(timed: wasTimed)
@@ -120,6 +121,15 @@ struct PracticeView: View {
             timed.restart()
         }
         .onChange(of: speed) { _, new in timed.setSpeed(new) }
+    }
+
+    /// The Mac (Catalyst) title bar doesn't show `.principal` items, so there the switch goes next to Restart.
+    private var modeSwitchPlacement: ToolbarItemPlacement {
+        #if targetEnvironment(macCatalyst)
+        .topBarLeading
+        #else
+        .principal
+        #endif
     }
 
     private var header: some View {
@@ -203,6 +213,23 @@ struct PracticeView: View {
     }
 
     private func load() {
+        installMIDIHandler()
+        timed.onFinished = {
+            let e = timed.engine
+            finish(PracticeResult(timed: true, total: e.noteCount, wrong: e.wrongCount, missed: e.missedCount))
+        }
+        guard song == nil else { return }
+        let all = library.imported + library.allSamples
+        guard let entry = all.first(where: { $0.url.lastPathComponent == lastSong }) ?? library.samples.first else {
+            loadError = "Sample song missing from app bundle"
+            return
+        }
+        open(entry)
+    }
+
+    /// Routes note events to the current mode. The handler keeps the `timedMode` value from when it was made
+    /// (it is a copy of this view), so it is made again whenever the mode changes.
+    private func installMIDIHandler() {
         midi.onEvent = { event in
             switch event {
             case .noteOn(let pitch, _) where timedMode:
@@ -228,17 +255,6 @@ struct PracticeView: View {
                 engine.noteOff(pitch)
             }
         }
-        timed.onFinished = {
-            let e = timed.engine
-            finish(PracticeResult(timed: true, total: e.noteCount, wrong: e.wrongCount, missed: e.missedCount))
-        }
-        guard song == nil else { return }
-        let all = library.imported + library.allSamples
-        guard let entry = all.first(where: { $0.url.lastPathComponent == lastSong }) ?? library.samples.first else {
-            loadError = "Sample song missing from app bundle"
-            return
-        }
-        open(entry)
     }
 
     /// The song was played to the end: record it and show the result card.
