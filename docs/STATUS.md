@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-10-08 (session 12: timed mode with speed, metronome and pause)
+Last updated: 2026-10-09 (session 13: lesson notes before each practice)
 
 ## Where we are
 
@@ -115,9 +115,32 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   scrolling, missed notes turning orange, wrong notes counted. **Not verified:** hearing the clicks, the buttons by hand,
   playing along with the real piano (timing/latency of the half-beat window).
 
+- **Lesson notes** (session 13, user's request): each bundled practice has a short lesson in a Markdown file **next to its
+  `.mid` with the same name** (`Intermediate III/Fingers 2 · Skips.md` for `Fingers 2 · Skips.mid`; `twinkle.md`), so a new
+  level folder just needs `.mid` + `.md` pairs. Picking a song in the Songs sheet opens the note as a sheet (title, scrollable
+  text, **Start Practice** closes it; swipe down also closes); the **book** toolbar button shows it again (pauses timed mode).
+  Not shown when the last song reopens on launch. Format: `# Title`, `## Heading`, `- bullet`, paragraphs, inline
+  `**bold**`; parsed by `PianoCore/PracticeNote.swift` (tested), loaded by `SongLibrary.note(for:)`, drawn by
+  `PracticeNoteView.swift`. Each note picks one point to watch (repeated/held notes, mirrored left-hand fingers, moving
+  position, F#, weak fingers 4-5, skips = thirds, mirror vs parallel). A test checks every sample has a note with a title.
+  25 tests pass; seen in the simulator (Fingers 2 note, with a temporary hook that opened it; removed).
+  **Not verified:** picking a song by hand and the note appearing after the Songs sheet closes. Imported songs have no notes
+  (a `.md` is not imported with the `.mid`).
+- **Music examples in lesson notes** (session 13, user's request: plain text was boring): a fenced ```` ```staff ```` block in
+  a note is drawn as a still grand staff (the practice's `StaffView` with `fitBeats`: no cursor, whole bars fill the width),
+  with finger numbers, **blue highlighted notes** and an optional caption. Inside, one line per hand, e.g.
+  `right: C4/1 E4/3! G4/5:2` / `left: C3/5+G3/1:4` / `time: 3/4` / `caption: …` (`/finger`, `!` highlight, `+` chord,
+  `:beats` length, `r` rest; see `StaffExample` in `PracticeNote.swift`). A block that can't be read shows an orange
+  warning instead; the tests require every bundled note to have at least one readable example. All 11 notes now have
+  1–2 examples taken from the practice's own bars (e.g. the C → F move, F# with finger 3, skips line-to-line).
+  26 tests pass; seen in the simulator ("2. C + F positions (both hands)"). Rests are blank space (the staff can't draw rests).
+
 **Not yet verified:** running on the real iPad; in-app Bluetooth pairing; the Songs sheet and import picker by hand.
 
 ## Next steps (in order)
+
+0. User to try the lesson notes: pick a practice in the Songs sheet; is the text the right length and level? Should the
+   note also show on launch, or have a "don't show again"? Should importing a `.mid` also take a `.md` with the same name?
 
 0. User to try timed mode with the real piano (Catalyst build). Open questions: is ±½ beat the right hit window (it gets
    wider in seconds at slow speeds)? Should missed notes be red instead of orange? Count-in on resume after Pause?
@@ -167,6 +190,7 @@ and team are already set up): connect the iPad, turn on Developer Mode, install 
 | 2026-10-07 | Position practices are a numbered series, each adding one position (1. C, 2. C + F, 3. C + F + D), 8 bars per position (user's call). |
 | 2026-10-08 | User marks: one mark per song, **Hard** or **Interesting** (or none), kept apart from the automatic "Difficult"; marked songs get their own "Marked" section at the top of the Songs sheet. |
 | 2026-10-08 | Timed mode: speed is a % of the song's tempo (keeps tempo changes); one-bar count-in; metronome on every quarter beat; ±½-beat hit window; missed = orange on the staff; missed + wrong count as mistakes for progress. |
+| 2026-10-09 | Lesson notes are Markdown files next to each song (`x.md` for `x.mid`, same level folder), shown after picking the song; closable and scrollable. |
 | 2026-10-06 | Song library: imported `.mid` files are **copied** into the app (Documents/Songs), so they stay if the original moves; the file name is the song title; the last song opens on launch. No database: the folder is the library. |
 
 ## Known issues / caveats

@@ -6,11 +6,14 @@ import SwiftUI
 /// keys show as red note heads at the cursor. Finger numbers (when the song has them) sit above
 /// treble notes and below bass notes.
 /// `scrollBeat` (the beat under the cursor) is animatable, so changing it slides the music smoothly.
+/// With `fitBeats` set it is a still picture instead (music examples in lesson notes): no cursor, and that many
+/// beats from the start fill the width.
 struct StaffView: View, Animatable {
     var song: Song
     var noteStates: [Int: WaitModeEngine.NoteState] = [:]
     var wrongPitches: [UInt8] = []
     var scrollBeat: Double
+    var fitBeats: Double? = nil
 
     var animatableData: Double {
         get { scrollBeat }
@@ -19,14 +22,14 @@ struct StaffView: View, Animatable {
 
     var body: some View {
         Canvas { context, size in
-            let m = Metrics(size: size, beatsPerBar: song.initialTimeSignature.beatsPerBar)
+            let m = Metrics(size: size, beatsPerBar: song.initialTimeSignature.beatsPerBar, fitBeats: fitBeats)
             drawStaves(&context, m)
             drawClefsAndTime(&context, m)
             var music = context
             music.clip(to: Path(CGRect(x: m.musicStartX, y: 0, width: size.width - m.musicStartX, height: size.height)))
             drawBarlines(&music, m)
             drawNotes(&music, m)
-            drawCursor(&context, m)
+            if fitBeats == nil { drawCursor(&context, m) }
             for pitch in wrongPitches {
                 let note = NoteEvent(id: -1, pitch: pitch, startBeat: 0, durationBeats: 1, velocity: 0)
                 drawHead(&context, m, StaffLayout.place(note), x: m.cursorX + m.sp * 1.6, value: .quarter, color: .red)
@@ -47,7 +50,7 @@ struct StaffView: View, Animatable {
         let cursorX: CGFloat
         let pxPerBeat: CGFloat
 
-        init(size: CGSize, beatsPerBar: Double) {
+        init(size: CGSize, beatsPerBar: Double, fitBeats: Double?) {
             // Height: 4 spaces of ledger room above, 4 for each staff, 6 between, 4 below.
             sp = size.height / 22
             trebleBottom = sp * 8
@@ -55,6 +58,12 @@ struct StaffView: View, Animatable {
             staffLeft = sp * 1.5
             staffRight = size.width - sp
             musicStartX = staffLeft + sp * 7
+            if let fitBeats {
+                // Still picture: the first note right after the clefs, the last bar line at the right edge.
+                cursorX = musicStartX
+                pxPerBeat = (staffRight - cursorX) / CGFloat(max(fitBeats, 1))
+                return
+            }
             cursorX = musicStartX + sp * 11      // room to see the last played notes
             // Zoom so that, from the next note at the cursor, two whole bars fit on screen plus
             // the first note of the bar after them (with room for its head).

@@ -126,6 +126,15 @@ final class SongLibrary: ObservableObject {
         return song
     }
 
+    /// The lesson note kept next to the song as a Markdown file with the same name ("x.md" for "x.mid"),
+    /// or nil if there is none.
+    func note(for entry: Entry) -> PracticeNote? {
+        let url = entry.url.deletingPathExtension().appendingPathExtension("md")
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        let note = PracticeNote(markdown: text)
+        return note.isEmpty ? nil : note
+    }
+
     enum LoadError: LocalizedError {
         case noNotes(String)
         var errorDescription: String? {

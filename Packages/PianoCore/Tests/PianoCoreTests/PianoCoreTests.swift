@@ -24,6 +24,80 @@ final class MIDIFileTests: XCTestCase {
         }
     }
 
+    func testEveryBundledSampleHasANote() throws {
+        // Each sample "x.mid" has its lesson in "x.md" next to it, with a title and some text.
+        let dir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("../../App/Resources/SampleSongs").standardized
+        for (name, _) in SampleSongs.all {
+            let note = PracticeNote(markdown: try String(contentsOf: dir.appendingPathComponent(name + ".md"), encoding: .utf8))
+            XCTAssertNotNil(note.title, name)
+            XCTAssertFalse(note.blocks.isEmpty, name)
+            // At least one music example, and every one readable.
+            XCTAssertTrue(note.blocks.contains { if case .staff = $0 { return true } else { return false } }, name)
+            for case .invalidStaff(let reason) in note.blocks { XCTFail("\(name): \(reason)") }
+        }
+    }
+
+    func testPracticeNoteMarkdown() {
+        let note = PracticeNote(markdown: """
+            # Pairs
+
+            Keep your **wrist** still
+            and relaxed.
+
+            ## Watch for
+            - finger 4
+              is the weakest
+            * curve your fingers
+            Last line.
+            """)
+        XCTAssertEqual(note.title, "Pairs")
+        XCTAssertEqual(note.blocks, [
+            .paragraph("Keep your **wrist** still and relaxed."),
+            .heading("Watch for"),
+            .bullet("finger 4 is the weakest"),
+            .bullet("curve your fingers"),
+            .paragraph("Last line."),
+        ])
+        XCTAssertNil(PracticeNote(markdown: "Just text").title)
+        XCTAssertTrue(PracticeNote(markdown: "\n\n").isEmpty)
+    }
+
+    func testStaffExample() throws {
+        let note = PracticeNote(markdown: """
+            Text before.
+            ```staff
+            right: C4/1 E4/3! G4/5:2
+            left: C3/5+G3/1:4
+            time: 4/4
+            caption: The C chord
+            ```
+            ```staff
+            right: H4
+            ```
+            """)
+        XCTAssertEqual(note.blocks.count, 3)
+        guard case .staff(let example) = note.blocks[1] else { return XCTFail("no staff") }
+        XCTAssertEqual(example.notes.map(\.pitch), [48, 55, 60, 64, 67])
+        XCTAssertEqual(example.notes.map(\.startBeat), [0, 0, 0, 1, 2])
+        XCTAssertEqual(example.notes.map(\.hand), [.left, .left, .right, .right, .right])
+        XCTAssertEqual(example.notes.map(\.finger), [5, 1, 1, 3, 5])
+        XCTAssertEqual(example.notes.last?.durationBeats, 2)
+        XCTAssertEqual(example.highlighted, [3], "E4")
+        XCTAssertEqual(example.caption, "The C chord")
+        XCTAssertEqual(example.song.durationBeats, 4)
+        guard case .invalidStaff = note.blocks[2] else { return XCTFail("bad note name should be reported") }
+
+        let rest = try StaffExample("right: r:2 F#4:2\ntime: 3/4")
+        XCTAssertEqual(rest.notes.map(\.pitch), [66])
+        XCTAssertEqual(rest.notes.first?.startBeat, 2)
+        XCTAssertEqual(rest.timeSignature.numerator, 3)
+        XCTAssertEqual(try StaffExample("left: C3+G3:4! E3").highlighted, [0, 1], "! after the length: whole chord")
+        XCTAssertThrowsError(try StaffExample("right: C4/6"))
+        XCTAssertThrowsError(try StaffExample("caption: no notes"))
+    }
+
     func testFingersRoundTrip() throws {
         // Two fingered notes in one chord, plus a note without a finger, in both file formats.
         let song = Song(title: "Fingers", notes: [

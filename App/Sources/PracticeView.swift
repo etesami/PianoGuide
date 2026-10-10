@@ -3,12 +3,18 @@ import SwiftUI
 
 /// Main screen: the chosen song (a bundled sample or an imported .mid) on a scrolling grand staff, in wait mode
 /// (the song waits for each note) or timed mode (it moves on at the chosen speed with a metronome; misses are counted).
+/// Picking a song that has a lesson note shows the note first; the book button shows it again.
 struct PracticeView: View {
     @EnvironmentObject private var midi: MIDIInputService
     @StateObject private var library = SongLibrary()
     @State private var song: Song?
     @State private var songEntry: SongLibrary.Entry?
     @State private var showLibrary = false
+    /// The open song's lesson note (a Markdown file next to it), shown after the song is picked in the Songs sheet.
+    @State private var note: PracticeNote?
+    @State private var showNote = false
+    /// Set when a song is picked; the note opens once the Songs sheet has gone (two sheets can't overlap).
+    @State private var notePending = false
     /// The last song picked, as a file name ("twinkle.mid"); imported songs are looked up first.
     @AppStorage("lastSong") private var lastSong = ""
     @State private var engine = WaitModeEngine(steps: [])
@@ -57,6 +63,11 @@ struct PracticeView: View {
                     .frame(width: 160)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
+                    if note != nil {
+                        Button { timed.pause(); showNote = true } label: { Label("Lesson Note", systemImage: "text.book.closed") }
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     if let songEntry {
                         let mark = library.progress(of: songEntry).mark
                         Menu {
@@ -80,8 +91,14 @@ struct PracticeView: View {
             .sheet(isPresented: $showPairing, onDismiss: midi.connectAllSources) {
                 BluetoothMIDIPairingView()
             }
-            .sheet(isPresented: $showLibrary) {
-                SongLibraryView(library: library, current: songEntry, onPick: open)
+            .sheet(isPresented: $showLibrary, onDismiss: {
+                if notePending, note != nil { showNote = true }
+                notePending = false
+            }) {
+                SongLibraryView(library: library, current: songEntry, onPick: { open($0); notePending = true })
+            }
+            .sheet(isPresented: $showNote) {
+                if let note { PracticeNoteView(note: note, songName: song?.title ?? "") }
             }
         }
         .onAppear(perform: load)
@@ -236,6 +253,7 @@ struct PracticeView: View {
             recordAbandoned()
             song = loaded
             songEntry = entry
+            note = library.note(for: entry)
             engine = WaitModeEngine(steps: PracticeSteps.make(from: loaded.notes))
             timed.load(loaded, speed: speed)
             loadError = nil

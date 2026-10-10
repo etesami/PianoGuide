@@ -103,6 +103,9 @@ Bluetooth also works on the Mac: pair the piano in Audio MIDI Setup → MIDI Stu
 | `…/WaitModeEngine.swift` | `PracticeSteps` (chord grouping) and the wait-mode state machine |
 | `…/StaffLayout.swift` | Staff positions (clef, line/space, sharps, ledger lines), `NoteValue`, bar lines |
 | `…/SongProgress.swift` | Per-song progress: times completed, recent wrong notes, "difficult" rule (5+ wrong notes); the user's own `SongMark` (hard / interesting) |
+| `…/PracticeNote.swift` | Lesson note parsed from a small Markdown subset (title, headings, bullets, paragraphs) and `StaffExample` (```` ```staff ```` music examples) |
+| `App/Resources/SampleSongs/<level>/x.md` | Lesson note for `x.mid`, shown when the song is picked |
+| `App/Sources/PracticeNoteView.swift` | Sheet showing a lesson note (scrolls; "Start Practice" closes it) |
 | `App/Sources/MIDIInputService.swift` | CoreMIDI: connects all sources and publishes note on/off (also simulated events) |
 | `App/Sources/BluetoothMIDIPairingView.swift` | Wraps `CABTMIDICentralViewController` |
 | `App/Sources/PracticeView.swift` | Main screen: wait mode on the chosen song (staff + keyboard); remembers the last song |
