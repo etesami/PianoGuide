@@ -14,6 +14,7 @@ struct StaffView: View, Animatable {
     var wrongPitches: [UInt8] = []
     var scrollBeat: Double
     var fitBeats: Double? = nil
+    var showFingers = true
 
     var animatableData: Double {
         get { scrollBeat }
@@ -141,7 +142,7 @@ struct StaffView: View, Animatable {
             }
             drawHead(&context, m, StaffLayout.place(note), x: x,
                      value: NoteValue.from(beats: note.durationBeats), color: color)
-            if note.finger != nil {
+            if showFingers, note.finger != nil {
                 fingered[FingerGroupKey(clef: StaffLayout.clef(for: note), beat: note.startBeat), default: []]
                     .append((note, color))
             }

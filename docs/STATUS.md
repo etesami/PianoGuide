@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-10-09 (session 17: notes went to the wrong mode after switching Wait/Timed; switch missing on the Mac)
+Last updated: 2026-10-12 (session 18: toolbar button to hide finger numbers on the staff)
 
 ## Where we are
 
@@ -22,6 +22,9 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   "wrong notes: 1"; then C4 moved to step 3. Window screenshots work (Screen Recording permission granted).
 - **Key labels** (session 5): every on-screen key shows its note name (C4, F#4, …); the "Aa" toolbar button
   shows/hides them, and the choice is remembered (`@AppStorage("showKeyLabels")`). Seen in the simulator screenshot.
+- **Finger-number toggle** (session 18): a "123" toolbar button (`textformat.123`) next to "Aa" hides/shows the finger numbers above/below
+  the notes on the practice staff (`StaffView.showFingers`), remembered with `@AppStorage("showFingers")`.
+  Lesson-note examples always show them. Verified in the Mac Catalyst app by setting the saved value both ways: numbers show/hide. The icon looks the same in both states: on the Mac the toolbar ignored opacity, toggle highlighting and `.tint`. **Not verified:** clicking the button itself.
 - **Key colors** (session 5, confirmed by the user on the real piano): a key is green if it was correct when pressed,
   red if wrong, and keeps that color until released (even after the step moves on). After a wrong note, the keys
   still needed for the step turn orange until the step is done. No blue hint on the keyboard. Logic: `WaitModeEngine.keyStates`.

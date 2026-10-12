@@ -25,6 +25,7 @@ struct PracticeView: View {
     /// so chords can be played with a mouse (simulator, Mac). The real piano is unaffected.
     @State private var latched: Set<UInt8> = []
     @AppStorage("showKeyLabels") private var showKeyLabels = true
+    @AppStorage("showFingers") private var showFingers = true
     @AppStorage("timedMode") private var timedMode = false
     /// Timed mode's speed as a fraction of the song's own tempo.
     @AppStorage("timedSpeed") private var speed = 0.75
@@ -92,6 +93,11 @@ struct PracticeView: View {
                     Button { showKeyLabels.toggle() } label: {
                         Label(showKeyLabels ? "Hide Key Labels" : "Show Key Labels",
                               systemImage: showKeyLabels ? "textformat" : "textformat.slash")
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showFingers.toggle() } label: {
+                        Label(showFingers ? "Hide Finger Numbers" : "Show Finger Numbers", systemImage: "textformat.123")
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -178,13 +184,15 @@ struct PracticeView: View {
             StaffView(song: song,
                       noteStates: e.noteStates,
                       wrongPitches: e.keyStates.filter { $0.value == .wrong }.map(\.key).sorted(),
-                      scrollBeat: min(e.beat, song.durationBeats))
+                      scrollBeat: min(e.beat, song.durationBeats),
+                      showFingers: showFingers)
                 .frame(height: 360)
         } else if let song {
             StaffView(song: song,
                       noteStates: engine.noteStates,
                       wrongPitches: engine.keyStates.filter { $0.value == .wrong }.map(\.key).sorted(),
-                      scrollBeat: engine.currentStep?.startBeat ?? song.durationBeats)
+                      scrollBeat: engine.currentStep?.startBeat ?? song.durationBeats,
+                      showFingers: showFingers)
                 .animation(.easeInOut(duration: 0.3), value: engine.currentIndex)
                 .frame(height: 360)
         }
