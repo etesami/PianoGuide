@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-10-12 (session 19: Listen button plays the song by itself at the timed-mode speed)
+Last updated: 2026-10-12 (session 20: delete imported songs from the long-press / right-click menu)
 
 ## Where we are
 
@@ -189,6 +189,13 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   `Song.listenStates(atBeat:)` / `soundingPitches(atBeat:)` (tested). 30 tests pass; iOS simulator and Catalyst build;
   seen in a Catalyst screenshot with a temporary hook that started Listen (removed). **Not verified:** hearing it,
   pressing the button by hand.
+
+- **Delete imported songs** (session 20, user's request): besides swipe-left in "My Songs" (hard to find, awkward with a
+  mouse), a song in My Songs (or an imported one in "Marked") now has **Delete Song…** in its long-press / right-click menu,
+  with a confirmation ("The original file is not touched"). It removes the copy in Documents/Songs and its progress/mark.
+  If the deleted song is the one open, the practice screen switches to the first sample and records nothing for it
+  (`PracticeView` watches `library.imported`). Samples can't be deleted. Catalyst build succeeds.
+  **Not verified:** the menu and dialog by hand.
 
 **Not yet verified:** running on the real iPad; in-app Bluetooth pairing; the Songs sheet and import picker by hand.
 

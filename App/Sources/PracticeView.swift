@@ -121,6 +121,12 @@ struct PracticeView: View {
             }
         }
         .onAppear(perform: load)
+        .onChange(of: library.imported) { _, imported in
+            // The open song was deleted from the library: switch to a sample (nothing is recorded for it).
+            guard let songEntry, !songEntry.isSample, !imported.contains(songEntry) else { return }
+            self.songEntry = nil
+            if let first = library.samples.first { open(first) }
+        }
         .onChange(of: timedMode) { wasTimed, _ in
             installMIDIHandler()
             listen.stop()

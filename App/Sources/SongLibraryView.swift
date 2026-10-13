@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// Sheet listing the bundled samples (with category folders) and imported songs. Tap a song to practise it,
-/// swipe to delete an imported one, or import `.mid` files from the Files app.
+/// remove an imported one (swipe left, or long-press / right-click → Delete Song), or import `.mid` files from the Files app.
 /// Songs played to the end at least once get a green check; songs with many recent wrong notes are tinted orange
 /// as difficult (`SongProgress`). The song open now has a play icon.
 /// The user can mark a song hard or interesting (swipe right or long-press); marked songs are also listed in
@@ -15,6 +15,7 @@ struct SongLibraryView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showImporter = false
     @State private var importError: String?
+    @State private var pendingDelete: SongLibrary.Entry?
 
     var body: some View {
         NavigationStack {
@@ -72,6 +73,13 @@ struct SongLibraryView: View {
             } message: {
                 Text(importError ?? "")
             }
+            .confirmationDialog("Delete \"\(pendingDelete?.name ?? "")\"?",
+                                isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+                                titleVisibility: .visible, presenting: pendingDelete) { entry in
+                Button("Delete Song", role: .destructive) { library.delete(entry) }
+            } message: { _ in
+                Text("The song and its progress are removed from the app. The original file is not touched.")
+            }
         }
     }
 
@@ -119,6 +127,12 @@ struct SongLibraryView: View {
         .contextMenu {
             SongMarkPicker(mark: Binding(get: { library.progress(of: entry).mark },
                                          set: { library.setMark($0, of: entry) }))
+            if !entry.isSample {
+                Divider()
+                Button(role: .destructive) { pendingDelete = entry } label: {
+                    Label("Delete Song…", systemImage: "trash")
+                }
+            }
         }
     }
 
