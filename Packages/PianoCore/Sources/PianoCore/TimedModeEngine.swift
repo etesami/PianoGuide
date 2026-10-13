@@ -107,3 +107,26 @@ extension Song {
         beat + seconds * bpm(atBeat: beat) * speed / 60
     }
 }
+
+extension Song {
+    /// Listen mode (the app plays the song by itself): notes sounding at `beat` are `.next`,
+    /// notes that have started and ended are `.played`; later notes are left out.
+    public func listenStates(atBeat beat: Double) -> [Int: WaitModeEngine.NoteState] {
+        var states: [Int: WaitModeEngine.NoteState] = [:]
+        for note in notes {
+            if note.startBeat > beat { break }
+            states[note.id] = note.startBeat + note.durationBeats > beat ? .next : .played
+        }
+        return states
+    }
+
+    /// Pitches sounding at `beat` (for lighting the keyboard while the song plays itself).
+    public func soundingPitches(atBeat beat: Double) -> Set<UInt8> {
+        var pitches: Set<UInt8> = []
+        for note in notes {
+            if note.startBeat > beat { break }
+            if note.startBeat + note.durationBeats > beat { pitches.insert(note.pitch) }
+        }
+        return pitches
+    }
+}

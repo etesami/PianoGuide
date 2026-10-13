@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-10-12 (session 18: toolbar button to hide finger numbers on the staff)
+Last updated: 2026-10-12 (session 19: Listen button plays the song by itself at the timed-mode speed)
 
 ## Where we are
 
@@ -176,9 +176,27 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   Grading: `PianoCore/PracticeResult.swift` (tested); card: `App/Sources/PracticeResultView.swift`. 29 tests pass;
   both colors seen in simulator screenshots with a temporary hook (removed). **Not verified:** finishing a song by hand.
 
+- **Listen (auto-play)** (session 19, user's request: "a perfect song play given the tempo"): in timed mode a
+  **Listen** button (speaker icon, becomes **Stop**) next to Play makes the app play the whole song by itself at the
+  speed stepper's value (changing the speed while listening takes effect at once). The notes are scheduled on the
+  audio clock by `AVAudioSequencer` from the song written back to MIDI (`MIDIFileWriter`), so timing is exact and
+  follows tempo changes; a 60 Hz timer only reads the position to scroll the staff. Sounding notes are blue at the
+  cursor, finished ones green, and the sounding keys light up green. No count-in or metronome. Keys pressed while
+  listening are ignored (not judged). It stops on Stop, Play, Restart, mode switch, opening songs/note/Bluetooth, or
+  another song, and by itself at the end (no result card, nothing recorded). Sound: `AVAudioUnitSampler` with the
+  macOS General MIDI piano (`gs_instruments.dls`) on Mac Catalyst; **iPadOS has no built-in sound bank, so on the iPad
+  it is the sampler's plain default tone**. App: `App/Sources/AutoPlayer.swift`; note colors/keys from
+  `Song.listenStates(atBeat:)` / `soundingPitches(atBeat:)` (tested). 30 tests pass; iOS simulator and Catalyst build;
+  seen in a Catalyst screenshot with a temporary hook that started Listen (removed). **Not verified:** hearing it,
+  pressing the button by hand.
+
 **Not yet verified:** running on the real iPad; in-app Bluetooth pairing; the Songs sheet and import picker by hand.
 
 ## Next steps (in order)
+
+0. User to try **Listen** (timed mode). Is the Mac piano sound OK? For a real piano sound on the iPad, options: bundle a
+   small piano SoundFont (`.sf2`) for the sampler, or send the notes out to the FP-30X over MIDI. Pause/resume,
+   a count-in, or Listen in wait mode only if wanted.
 
 0. User to try the result card by finishing a song. Is 10% of the notes the right line between green and
    orange? Should it play a sound?

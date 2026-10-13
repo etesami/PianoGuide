@@ -4,6 +4,7 @@ import SwiftUI
 /// Main screen: the chosen song (a bundled sample or an imported .mid) on a scrolling grand staff, in wait mode
 /// (the song waits for each note) or timed mode (it moves on at the chosen speed with a metronome; misses are counted).
 /// Picking a song that has a lesson note shows the note first; the book button shows it again.
+/// In timed mode, Listen plays the song by itself at the chosen speed.
 struct PracticeView: View {
     @EnvironmentObject private var midi: MIDIInputService
     @StateObject private var library = SongLibrary()
@@ -30,6 +31,8 @@ struct PracticeView: View {
     /// Timed mode's speed as a fraction of the song's own tempo.
     @AppStorage("timedSpeed") private var speed = 0.75
     @StateObject private var timed = TimedSession()
+    /// Listen: the app plays the song by itself at the timed-mode speed.
+    @StateObject private var listen = AutoPlayer()
     /// Shown as a card over the screen when a song has been played to the end.
     @State private var result: PracticeResult?
 
@@ -40,7 +43,7 @@ struct PracticeView: View {
                 staff
                 Spacer()
                 KeyboardView(range: keyboardRange,
-                             states: timedMode ? timed.engine.keyStates : engine.keyStates,
+                             states: keyStates,
                              pressed: midi.pressed,
                              showLabels: showKeyLabels,
                              onPress: { midi.simulate(.noteOn(pitch: $0, velocity: 100)) },
@@ -60,10 +63,10 @@ struct PracticeView: View {
             .navigationTitle(song?.title ?? "PianoGuide")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { timed.pause(); showLibrary = true } label: { Label("Songs", systemImage: "music.note.list") }
+                    Button { pauseAll(); showLibrary = true } label: { Label("Songs", systemImage: "music.note.list") }
                 }
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Restart") { closeResult(); releaseLatched(); recordAbandoned(); engine.reset(); timed.restart() }
+                    Button("Restart") { listen.stop(); closeResult(); releaseLatched(); recordAbandoned(); engine.reset(); timed.restart() }
                 }
                 ToolbarItem(placement: modeSwitchPlacement) {
                     Picker("Mode", selection: $timedMode) {
@@ -75,7 +78,7 @@ struct PracticeView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     if note != nil {
-                        Button { timed.pause(); showNote = true } label: { Label("Lesson Note", systemImage: "text.book.closed") }
+                        Button { pauseAll(); showNote = true } label: { Label("Lesson Note", systemImage: "text.book.closed") }
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -101,7 +104,7 @@ struct PracticeView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { timed.pause(); showPairing = true } label: { Label("Bluetooth MIDI", systemImage: "dot.radiowaves.left.and.right") }
+                    Button { pauseAll(); showPairing = true } label: { Label("Bluetooth MIDI", systemImage: "dot.radiowaves.left.and.right") }
                 }
             }
             .sheet(isPresented: $showPairing, onDismiss: midi.connectAllSources) {
@@ -120,13 +123,14 @@ struct PracticeView: View {
         .onAppear(perform: load)
         .onChange(of: timedMode) { wasTimed, _ in
             installMIDIHandler()
+            listen.stop()
             closeResult()
             releaseLatched()
             recordAbandoned(timed: wasTimed)
             engine.reset()
             timed.restart()
         }
-        .onChange(of: speed) { _, new in timed.setSpeed(new) }
+        .onChange(of: speed) { _, new in timed.setSpeed(new); listen.setSpeed(new) }
     }
 
     /// The Mac (Catalyst) title bar doesn't show `.principal` items, so there the switch goes next to Restart.
@@ -161,15 +165,22 @@ struct PracticeView: View {
         let percent = Int((speed * 100).rounded())
         let bpm = Int(((song?.bpm(atBeat: max(0, e.beat)) ?? 120) * speed).rounded())
         return HStack(spacing: 20) {
-            Button { timed.togglePlay() } label: {
+            Button { listen.stop(); timed.togglePlay() } label: {
                 Label(timed.isPlaying ? "Pause" : "Play", systemImage: timed.isPlaying ? "pause.fill" : "play.fill")
                     .frame(minWidth: 90)
             }
             .buttonStyle(.borderedProminent)
             .disabled(song == nil)
+            Button { toggleListen() } label: {
+                Label(listen.isPlaying ? "Stop" : "Listen", systemImage: listen.isPlaying ? "stop.fill" : "speaker.wave.2.fill")
+                    .frame(minWidth: 90)
+            }
+            .buttonStyle(.bordered)
+            .disabled(song == nil)
             Stepper("Speed \(percent)% · \(bpm) BPM", value: $speed, in: 0.25...1.5, step: 0.05)
                 .fixedSize()
-            Text(e.isFinished && !e.steps.isEmpty
+            Text(listen.isPlaying ? "Listening: the song plays by itself at this speed"
+                 : e.isFinished && !e.steps.isEmpty
                  ? "Finished! Played \(e.hitNotes.count) of \(e.noteCount) · missed \(e.missedCount) · wrong \(e.wrongCount)"
                  : timed.hasStarted
                     ? "Played \(e.hitNotes.count) of \(e.noteCount) · missed \(e.missedCount) · wrong \(e.wrongCount)"
@@ -179,7 +190,14 @@ struct PracticeView: View {
     }
 
     @ViewBuilder private var staff: some View {
-        if let song, timedMode {
+        if let song, listen.isPlaying {
+            StaffView(song: song,
+                      noteStates: song.listenStates(atBeat: listen.beat),
+                      wrongPitches: [],
+                      scrollBeat: min(listen.beat, song.durationBeats),
+                      showFingers: showFingers)
+                .frame(height: 360)
+        } else if let song, timedMode {
             let e = timed.engine
             StaffView(song: song,
                       noteStates: e.noteStates,
@@ -198,6 +216,13 @@ struct PracticeView: View {
         }
     }
 
+    private var keyStates: [UInt8: WaitModeEngine.KeyState] {
+        if let song, listen.isPlaying {
+            return Dictionary(uniqueKeysWithValues: song.soundingPitches(atBeat: listen.beat).map { ($0, .correct) })
+        }
+        return timedMode ? timed.engine.keyStates : engine.keyStates
+    }
+
     private var keyboardRange: ClosedRange<UInt8> {
         guard let range = song?.pitchRange else { return 48...84 }
         // Pad to whole octaves starting at C so the keyboard looks normal.
@@ -212,6 +237,19 @@ struct PracticeView: View {
         } else {
             midi.simulate(.noteOff(pitch: pitch))
         }
+    }
+
+    private func pauseAll() {
+        timed.pause()
+        listen.stop()
+    }
+
+    private func toggleListen() {
+        if listen.isPlaying { listen.stop(); return }
+        guard let song else { return }
+        timed.pause()
+        closeResult()
+        listen.play(song, speed: speed)
     }
 
     private func releaseLatched() {
@@ -239,6 +277,8 @@ struct PracticeView: View {
     /// (it is a copy of this view), so it is made again whenever the mode changes.
     private func installMIDIHandler() {
         midi.onEvent = { event in
+            // While the song plays itself, keys are not judged.
+            if listen.isPlaying, case .noteOn = event { return }
             switch event {
             case .noteOn(let pitch, _) where timedMode:
                 if case .wrong = timed.noteOn(pitch) {
@@ -292,6 +332,7 @@ struct PracticeView: View {
     private func open(_ entry: SongLibrary.Entry) {
         do {
             let loaded = try library.load(entry)
+            listen.stop()
             closeResult()
             releaseLatched()
             recordAbandoned()

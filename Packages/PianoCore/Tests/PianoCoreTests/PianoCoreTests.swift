@@ -483,4 +483,17 @@ final class TimedModeTests: XCTestCase {
         XCTAssertEqual(song.beat(after: 1, from: -4, speed: 0.5), -3, "count-in uses the first tempo, at half speed")
         XCTAssertEqual(song.beat(after: 1, from: 5, speed: 1), 6, "60 BPM after beat 4")
     }
+
+    func testListenStatesAndSoundingPitches() {
+        let song = Song(title: "t", notes: [
+            NoteEvent(id: 0, pitch: 48, startBeat: 0, durationBeats: 4, velocity: 80, hand: .left),
+            NoteEvent(id: 1, pitch: 60, startBeat: 0, durationBeats: 1, velocity: 80, hand: .right),
+            NoteEvent(id: 2, pitch: 62, startBeat: 1, durationBeats: 1, velocity: 80, hand: .right),
+        ])
+        XCTAssertEqual(song.listenStates(atBeat: -1), [:], "nothing during a lead-in")
+        XCTAssertEqual(song.listenStates(atBeat: 0.5), [0: .next, 1: .next])
+        XCTAssertEqual(song.listenStates(atBeat: 1), [0: .next, 1: .played, 2: .next], "a note ends as the next starts")
+        XCTAssertEqual(song.soundingPitches(atBeat: 1.5), [48, 62])
+        XCTAssertEqual(song.soundingPitches(atBeat: 4), [])
+    }
 }
