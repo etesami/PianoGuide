@@ -46,6 +46,7 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   `TestSongs/Minuet in G.mid` (single track split at middle C, 3/4, eighths, F#, tempo change); see `TestSongs/README.md`.
   Generated from `PianoCore/TestSongs.swift`; the writer now also writes time signatures and single-track files.
   Both load in the simulator with the right time signature, hands and step count.
+  `TestSongs/README.md` gives each song a level and a description for the player.
 - **Finger numbers** (session 7): notes with a finger show it on the staff, above treble notes and below bass notes
   (clear of stems; stacked for chords), in the note's color. In `.mid` files a finger is stored as a lyric event "1"–"5"
   just before the note-on (our own convention; MIDI has no standard; the writer and parser both handle it).

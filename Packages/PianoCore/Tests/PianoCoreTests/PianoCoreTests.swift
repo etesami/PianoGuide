@@ -213,6 +213,7 @@ final class MIDIFileTests: XCTestCase {
             XCTAssertEqual(parsed.notes.map(\.startBeat), song.notes.map(\.startBeat), name)
             // Two tracks give the hands directly; the single-track file is split at middle C, which matches here too.
             XCTAssertEqual(parsed.notes.map(\.hand), song.notes.map(\.hand), name)
+            XCTAssertEqual(parsed.notes.map(\.finger), song.notes.map(\.finger), name)
         }
         XCTAssertEqual(TestSongs.minuetInG.timeSignatures.first?.numerator, 3)
         XCTAssertEqual(PracticeSteps.make(from: TestSongs.odeToJoy.notes).first?.pitches.count, 4, "C3+E3+G3 with E4")
