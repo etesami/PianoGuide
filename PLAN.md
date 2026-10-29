@@ -192,7 +192,7 @@ document types so the app can open `.mid` and `.musicxml` files.
 | 3   | **Piano roll**      | The song scrolls smoothly at 60/120 fps with a playhead, play/pause and tempo slider                | ⬜ |
 | 4   | **Wait mode**       | The song waits for the correct note or chord, with correct and wrong feedback                       | 🟡 engine done and tested; works with the real piano (Mac Catalyst), with green/red/orange key feedback; per-song progress (completed / difficult marks in the song list, session 10); user marks hard / interesting (session 11) |
 | 5   | **Play-along mode** | Hit windows, scoring, and a summary at the end of the song                                          | 🟡 timed mode (session 12): speed, metronome, pause, hit window ½ beat early / ¾ beat late, played/missed/wrong counts; result card (session 16); **Listen** plays the song by itself at the chosen speed (session 19) |
-| 6   | **Polish**          | Hand selection, A–B loop, metronome, latency calibration                                            | ⬜ |
+| 6   | **Polish**          | Hand selection, A–B loop, metronome, latency calibration                                            | 🟡 hand selection in wait mode by tapping a clef (session 22); metronome exists in timed mode |
 | 7   | **MusicXML**        | MusicXML import (hands and fingering come from the file)                                            | ⬜ |
 | 8   | **Staff view**      | A second renderer that shows staff notation                                                         | 🟡 basic grand staff with cursor and note colors in wait mode (session 6); no rests, beams, dots, flats yet |
 

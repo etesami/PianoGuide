@@ -8,6 +8,8 @@ import SwiftUI
 /// `scrollBeat` (the beat under the cursor) is animatable, so changing it slides the music smoothly.
 /// With `fitBeats` set it is a still picture instead (music examples in lesson notes): no cursor, and that many
 /// beats from the start fill the width.
+/// With `soloClef` set (one-hand practice) the other staff's clef and notes are greyed out; `onClefTap` is called
+/// when a clef is tapped.
 struct StaffView: View, Animatable {
     var song: Song
     var noteStates: [Int: WaitModeEngine.NoteState] = [:]
@@ -15,6 +17,8 @@ struct StaffView: View, Animatable {
     var scrollBeat: Double
     var fitBeats: Double? = nil
     var showFingers = true
+    var soloClef: Clef? = nil
+    var onClefTap: ((Clef) -> Void)? = nil
 
     var animatableData: Double {
         get { scrollBeat }
@@ -22,8 +26,24 @@ struct StaffView: View, Animatable {
     }
 
     var body: some View {
+        GeometryReader { geo in
+            canvas.onTapGesture { location in
+                guard let onClefTap else { return }
+                let m = metrics(geo.size)
+                guard location.x < m.musicStartX else { return }
+                // Above the gap between the staves is the treble clef, below it the bass clef.
+                onClefTap(location.y < m.trebleBottom + m.sp ? .treble : .bass)
+            }
+        }
+    }
+
+    private func metrics(_ size: CGSize) -> Metrics {
+        Metrics(size: size, beatsPerBar: song.initialTimeSignature.beatsPerBar, fitBeats: fitBeats)
+    }
+
+    private var canvas: some View {
         Canvas { context, size in
-            let m = Metrics(size: size, beatsPerBar: song.initialTimeSignature.beatsPerBar, fitBeats: fitBeats)
+            let m = metrics(size)
             drawStaves(&context, m)
             drawClefsAndTime(&context, m)
             var music = context
@@ -38,6 +58,10 @@ struct StaffView: View, Animatable {
         }
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.white))
     }
+
+    private static let muted = Color.gray.opacity(0.35)
+
+    private func isMuted(_ clef: Clef) -> Bool { soloClef != nil && soloClef != clef }
 
     // MARK: Geometry
 
@@ -102,15 +126,16 @@ struct StaffView: View, Animatable {
 
     private func drawClefsAndTime(_ context: inout GraphicsContext, _ m: Metrics) {
         // Unicode musical symbols; the glyphs' baselines are tuned by eye.
-        context.draw(Text("\u{1D11E}").font(.system(size: m.sp * 9.5)).foregroundColor(.black),
+        let ink = { (clef: Clef) in isMuted(clef) ? Self.muted : .black }
+        context.draw(Text("\u{1D11E}").font(.system(size: m.sp * 9.5)).foregroundColor(ink(.treble)),
                      at: CGPoint(x: m.staffLeft + m.sp * 2, y: m.y(.treble, position: 3)))
-        context.draw(Text("\u{1D122}").font(.system(size: m.sp * 5.5)).foregroundColor(.black),
+        context.draw(Text("\u{1D122}").font(.system(size: m.sp * 5.5)).foregroundColor(ink(.bass)),
                      at: CGPoint(x: m.staffLeft + m.sp * 2.2, y: m.y(.bass, position: 7)))
         let sig = song.initialTimeSignature
         for clef in [Clef.treble, .bass] {
             for (number, position) in [(sig.numerator, 6), (sig.denominator, 2)] {
                 context.draw(Text("\(number)").font(.system(size: m.sp * 2.4, weight: .heavy, design: .serif))
-                                .foregroundColor(.black),
+                                .foregroundColor(ink(clef)),
                              at: CGPoint(x: m.staffLeft + m.sp * 5, y: m.y(clef, position: position)))
             }
         }
@@ -135,6 +160,7 @@ struct StaffView: View, Animatable {
             guard x > m.musicStartX - m.sp * 3, note.startBeat < scrollBeat + visibleBeats + 1 else { continue }
             let color: Color
             switch noteStates[note.id] {
+            case _ where isMuted(StaffLayout.clef(for: note)): color = Self.muted
             case .played: color = .green
             case .next: color = .blue
             case .missed: color = .orange

@@ -5,6 +5,7 @@ import SwiftUI
 /// (the song waits for each note) or timed mode (it moves on at the chosen speed with a metronome; misses are counted).
 /// Picking a song that has a lesson note shows the note first; the book button shows it again.
 /// In timed mode, Listen plays the song by itself at the chosen speed.
+/// In wait mode, tapping a clef practises only that hand; tapping a clef again goes back to both hands.
 struct PracticeView: View {
     @EnvironmentObject private var midi: MIDIInputService
     @StateObject private var library = SongLibrary()
@@ -19,6 +20,9 @@ struct PracticeView: View {
     /// The last song picked, as a file name ("twinkle.mid"); imported songs are looked up first.
     @AppStorage("lastSong") private var lastSong = ""
     @State private var engine = WaitModeEngine(steps: [])
+    /// Wait mode with one hand only: the staff whose notes are waited for (nil = both hands).
+    /// One-hand runs are not recorded in the song's progress.
+    @State private var soloClef: Clef?
     @State private var loadError: String?
     @State private var showPairing = false
     @State private var flash: Color = .clear
@@ -157,9 +161,10 @@ struct PracticeView: View {
             if timedMode {
                 timedControls
             } else {
-                Text(engine.isFinished && !engine.steps.isEmpty
-                     ? "Finished! Wrong notes: \(engine.wrongCount)"
-                     : "Step \(engine.currentIndex + 1) of \(engine.steps.count) · wrong notes: \(engine.wrongCount)")
+                Text((engine.isFinished && !engine.steps.isEmpty
+                      ? "Finished! Wrong notes: \(engine.wrongCount)"
+                      : "Step \(engine.currentIndex + 1) of \(engine.steps.count) · wrong notes: \(engine.wrongCount)")
+                     + (soloClef == .treble ? " · right hand only" : soloClef == .bass ? " · left hand only" : ""))
                     .font(.headline)
             }
         }
@@ -216,7 +221,9 @@ struct PracticeView: View {
                       noteStates: engine.noteStates,
                       wrongPitches: engine.keyStates.filter { $0.value == .wrong }.map(\.key).sorted(),
                       scrollBeat: engine.currentStep?.startBeat ?? song.durationBeats,
-                      showFingers: showFingers)
+                      showFingers: showFingers,
+                      soloClef: soloClef,
+                      onClefTap: tapClef)
                 .animation(.easeInOut(duration: 0.3), value: engine.currentIndex)
                 .frame(height: 360)
         }
@@ -243,6 +250,17 @@ struct PracticeView: View {
         } else {
             midi.simulate(.noteOff(pitch: pitch))
         }
+    }
+
+    /// Tapping a clef practises only that hand from the start; tapping either clef again goes back to both hands
+    /// (so one staff always stays on).
+    private func tapClef(_ clef: Clef) {
+        guard let song else { return }
+        closeResult()
+        releaseLatched()
+        recordAbandoned()
+        soloClef = soloClef == nil ? clef : nil
+        engine = WaitModeEngine(steps: PracticeSteps.make(from: song.notes, clef: soloClef))
     }
 
     private func pauseAll() {
@@ -313,7 +331,7 @@ struct PracticeView: View {
 
     /// The song was played to the end: record it and show the result card.
     private func finish(_ finished: PracticeResult) {
-        if let songEntry {
+        if let songEntry, finished.timed || soloClef == nil {
             library.updateProgress(of: songEntry) { $0.recordCompleted(mistakes: finished.mistakes, notes: finished.total) }
         }
         result = finished
@@ -330,7 +348,7 @@ struct PracticeView: View {
         let e = timed.engine
         if isTimed, timed.hasStarted, !e.isFinished {
             library.updateProgress(of: songEntry) { $0.recordAbandoned(mistakes: e.wrongCount + e.missedCount, notes: e.noteCount) }
-        } else if !isTimed, !engine.isFinished {
+        } else if !isTimed, soloClef == nil, !engine.isFinished {
             library.updateProgress(of: songEntry) { $0.recordAbandoned(mistakes: engine.wrongCount, notes: engine.noteCount) }
         }
     }
@@ -345,6 +363,7 @@ struct PracticeView: View {
             song = loaded
             songEntry = entry
             note = library.note(for: entry)
+            soloClef = nil
             engine = WaitModeEngine(steps: PracticeSteps.make(from: loaded.notes))
             timed.load(loaded, speed: speed)
             loadError = nil

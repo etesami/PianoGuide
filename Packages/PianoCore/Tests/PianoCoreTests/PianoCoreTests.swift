@@ -259,6 +259,19 @@ final class WaitModeTests: XCTestCase {
         XCTAssertEqual(PracticeSteps.make(from: notes, hands: [.right])[0].pitches, [60, 64], "hand filter")
     }
 
+    func testOneClefOnly() {
+        let notes = [
+            NoteEvent(id: 0, pitch: 60, startBeat: 0, durationBeats: 1, velocity: 80, hand: .right),
+            NoteEvent(id: 1, pitch: 48, startBeat: 0, durationBeats: 1, velocity: 80, hand: .left),
+            NoteEvent(id: 2, pitch: 50, startBeat: 1, durationBeats: 1, velocity: 80, hand: .left),
+            NoteEvent(id: 3, pitch: 67, startBeat: 2, durationBeats: 1, velocity: 80),   // unknown hand: treble
+            NoteEvent(id: 4, pitch: 55, startBeat: 3, durationBeats: 1, velocity: 80),   // unknown hand: bass
+        ]
+        XCTAssertEqual(PracticeSteps.make(from: notes, clef: nil).count, 4)
+        XCTAssertEqual(PracticeSteps.make(from: notes, clef: .treble).map(\.noteIDs), [[0], [3]])
+        XCTAssertEqual(PracticeSteps.make(from: notes, clef: .bass).map(\.noteIDs), [[1], [2], [4]])
+    }
+
     func testEngine() {
         let notes = [
             NoteEvent(id: 0, pitch: 60, startBeat: 0, durationBeats: 1, velocity: 80),

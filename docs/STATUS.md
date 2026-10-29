@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-10-12 (session 20: delete imported songs from the long-press / right-click menu)
+Last updated: 2026-10-28 (session 22: one-hand practice by tapping a clef in wait mode)
 
 ## Where we are
 
@@ -197,9 +197,39 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   (`PracticeView` watches `library.imported`). Samples can't be deleted. Catalyst build succeeds.
   **Not verified:** the menu and dialog by hand.
 
+- **Piano guide + Reading Guide drills** (session 21, user's request: a beginner guide to note reading and moving the
+  hands, as a PDF to review, plus practice MIDI): `docs/guide/Piano Fundamentals.pdf` (33 pages, iPad Air size): keyboard
+  map, finger numbers, grand staff, landmark notes, steps/skips, hand positions (C, Middle C, G, F), moving the hand
+  (shift, thumb under, cross-over, extension), "Find, Fit, Flow" for reading without finger numbers, rhythm, the drills as
+  sheet music, a practice plan. Everything is generated: edit `docs/guide/piano-fundamentals.md` or `docs/guide/tools/*.py`
+  and run `docs/guide/build.sh` (see `docs/guide/README.md`). Figures are our own SVG (no music engraver installs on this
+  Intel Mac; clefs come from the Apple Symbols font). The 8 drills (finger number only where a position starts) are
+  bundled as a new category **Reading Guide** (`.mid` + lesson `.md`), written by the guide's Python, not by
+  `write-samples`/`SampleSongs.all`, so the core tests don't cover them. Checked with the app's own `MIDIFileParser` and
+  `PracticeNote` (compiled with swiftc): titles, 4/4, tempo, hands, fingers, every lesson note has a readable staff example.
+  **Not verified:** opening them in the app, playing them by hand.
+
+- **One-hand practice** (session 22, user's request): in **wait mode**, tapping a **clef** on the staff practises only that
+  hand: treble = right hand, bass = left hand. The other staff's clef, time signature, notes and finger numbers turn light
+  grey, and the song waits only for the chosen staff's notes (steps rebuilt with `PracticeSteps.make(from:clef:)`, which
+  goes by staff, so a single-track song split at middle C works; tested). Tapping **either** clef again goes back to both
+  hands, so both staves can never be off at once. Each change restarts the song from the start. The header adds
+  "· right hand only" / "· left hand only". Restart keeps the choice; opening another song goes back to both hands.
+  **One-hand runs are not recorded** in the song's progress (no Completed / Difficult). Keys pressed that aren't in the
+  chosen hand's step count as wrong, the same as before. Timed mode and Listen still use both hands.
+  The tap only looks at the clef area (left of the music), split at the gap between the staves (`StaffView.onClefTap`).
+  31 tests pass; Catalyst build; seen in a Catalyst screenshot ("1. C position (both hands)", right hand only: 34 steps,
+  bass greyed out) with a temporary hook (removed). **Not verified:** tapping the clef by hand, playing one hand through.
+
 **Not yet verified:** running on the real iPad; in-app Bluetooth pairing; the Songs sheet and import picker by hand.
 
 ## Next steps (in order)
+
+0. User to try **one-hand practice** (tap a clef in wait mode). Open questions: should a one-hand run count towards the
+   song's progress (maybe its own mark)? Should timed mode get it too? Should the choice stay when opening another song?
+
+0. User to read the guide PDF and try the **Reading Guide** drills (wait mode, then fingers hidden). Change or add
+   chapters/drills on request, then rebuild with `docs/guide/build.sh`.
 
 0. User to try **Listen** (timed mode). Is the Mac piano sound OK? For a real piano sound on the iPad, options: bundle a
    small piano SoundFont (`.sf2`) for the sampler, or send the notes out to the FP-30X over MIDI. Pause/resume,

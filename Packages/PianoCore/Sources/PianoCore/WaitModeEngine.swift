@@ -24,6 +24,12 @@ public enum PracticeSteps {
         }
         return steps
     }
+
+    /// Only the notes written on `clef` (one-hand practice); nil means both staves.
+    /// Uses the staff, not `hand`, so a single-track song split at middle C works too.
+    public static func make(from notes: [NoteEvent], clef: Clef?) -> [PracticeStep] {
+        make(from: notes.filter { clef == nil || StaffLayout.clef(for: $0) == clef })
+    }
 }
 
 /// Wait mode: the song does not move on until every pitch of the current step has been pressed.
