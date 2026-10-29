@@ -6,6 +6,7 @@ import SwiftUI
 /// Picking a song that has a lesson note shows the note first; the book button shows it again.
 /// In timed mode, Listen plays the song by itself at the chosen speed.
 /// In wait mode, tapping a clef practises only that hand; tapping a clef again goes back to both hands.
+/// Dragging the staff sideways moves through the song (to the right = back).
 struct PracticeView: View {
     @EnvironmentObject private var midi: MIDIInputService
     @StateObject private var library = SongLibrary()
@@ -23,6 +24,11 @@ struct PracticeView: View {
     /// Wait mode with one hand only: the staff whose notes are waited for (nil = both hands).
     /// One-hand runs are not recorded in the song's progress.
     @State private var soloClef: Clef?
+    /// While the staff is being dragged: the beat it started from, and the beat now under the cursor.
+    @State private var dragFrom: Double?
+    @State private var dragBeat: Double?
+    /// Timed mode was playing when the drag started, so it goes on (after a count-in) when the drag ends.
+    @State private var resumeAfterDrag = false
     @State private var loadError: String?
     @State private var showPairing = false
     @State private var flash: Color = .clear
@@ -213,17 +219,19 @@ struct PracticeView: View {
             StaffView(song: song,
                       noteStates: e.noteStates,
                       wrongPitches: e.keyStates.filter { $0.value == .wrong }.map(\.key).sorted(),
-                      scrollBeat: min(e.beat, song.durationBeats),
-                      showFingers: showFingers)
+                      scrollBeat: dragBeat ?? min(e.beat, song.durationBeats),
+                      showFingers: showFingers,
+                      onDrag: dragStaff)
                 .frame(height: 360)
         } else if let song {
             StaffView(song: song,
                       noteStates: engine.noteStates,
                       wrongPitches: engine.keyStates.filter { $0.value == .wrong }.map(\.key).sorted(),
-                      scrollBeat: engine.currentStep?.startBeat ?? song.durationBeats,
+                      scrollBeat: dragBeat ?? engine.currentStep?.startBeat ?? song.durationBeats,
                       showFingers: showFingers,
                       soloClef: soloClef,
-                      onClefTap: tapClef)
+                      onClefTap: tapClef,
+                      onDrag: dragStaff)
                 .animation(.easeInOut(duration: 0.3), value: engine.currentIndex)
                 .frame(height: 360)
         }
@@ -261,6 +269,29 @@ struct PracticeView: View {
         recordAbandoned()
         soloClef = soloClef == nil ? clef : nil
         engine = WaitModeEngine(steps: PracticeSteps.make(from: song.notes, clef: soloClef))
+    }
+
+    /// Dragging the staff moves through the song: to the right goes back, to the left goes ahead.
+    /// Wait mode lands on the nearest step; timed mode pauses, and if it was playing goes on after a one-bar count-in.
+    private func dragStaff(by beats: Double, ended: Bool) {
+        guard song != nil else { return }
+        let lastStep = (timedMode ? timed.engine.steps.last : engine.steps.last)?.startBeat ?? 0
+        if dragFrom == nil {
+            closeResult()
+            dragFrom = timedMode ? max(0, timed.engine.beat) : engine.currentStep?.startBeat ?? lastStep
+            resumeAfterDrag = timedMode && timed.isPlaying
+            timed.pause()
+        }
+        let target = min(max((dragFrom ?? 0) - beats, 0), lastStep)
+        guard ended else { dragBeat = target; return }
+        dragFrom = nil
+        dragBeat = nil
+        if timedMode {
+            timed.seek(to: target, resume: resumeAfterDrag)
+        } else {
+            releaseLatched()
+            engine.jump(to: engine.stepIndex(nearest: target))
+        }
     }
 
     private func pauseAll() {
@@ -331,7 +362,8 @@ struct PracticeView: View {
 
     /// The song was played to the end: record it and show the result card.
     private func finish(_ finished: PracticeResult) {
-        if let songEntry, finished.timed || soloClef == nil {
+        let skipped = finished.timed ? timed.engine.skippedAhead : engine.skippedAhead
+        if let songEntry, finished.timed || soloClef == nil, !skipped {
             library.updateProgress(of: songEntry) { $0.recordCompleted(mistakes: finished.mistakes, notes: finished.total) }
         }
         result = finished

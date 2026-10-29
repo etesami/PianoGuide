@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-10-28 (session 22: one-hand practice by tapping a clef in wait mode)
+Last updated: 2026-10-28 (session 22: one-hand practice by tapping a clef; drag the staff to move through the song)
 
 ## Where we are
 
@@ -221,12 +221,31 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   31 tests pass; Catalyst build; seen in a Catalyst screenshot ("1. C position (both hands)", right hand only: 34 steps,
   bass greyed out) with a temporary hook (removed). **Not verified:** tapping the clef by hand, playing one hand through.
 
+- **Drag the staff to move through the song** (session 22, user's request: "replay the last 5 sec"): in wait and timed
+  mode, dragging the staff sideways scrolls the music with the finger/mouse: **to the right goes back**, to the left
+  goes ahead (between the first and the last note). **Wait mode** lands on the step nearest the cursor
+  (`WaitModeEngine.jump(to:)` / `stepIndex(nearest:)`). **Timed mode** pauses while dragging and moves the playhead
+  (`TimedModeEngine.seek(to:)`): going back forgets the hits/misses from there on; going ahead leaves the skipped notes
+  unjudged (not missed). If it was playing, it goes on after **one bar of clicks** while the music waits
+  (`TimedSession.seek`; clicks stay on the song's beat grid); if it was paused, the next Play has that count-in.
+  Wrong-note counts are kept. **A run where you jumped ahead of the furthest point you had played to isn't recorded as
+  completed** (`skippedAhead`); going back is fine. Listen mode can't be dragged.
+  33 tests pass; seen in the Catalyst app with real mouse drags (posted with CGEvent): wait mode ahead to step 8 and back
+  to step 4; timed mode ahead with "missed 0". **Not verified:** the count-in after a drag (pressing Play), dragging on
+  the iPad (touch), and how a drag feels together with a clef tap.
+
+- **Install on the iPad from the command line** (session 22, user's request): `scripts/install-ipad.sh` lists the paired
+  iPads, asks which one, builds (Xcode's own DerivedData, shared with Xcode), installs and launches (`xcrun devicectl`).
+  Ran it on "Ehsan's iPad" (iPad13,16, iPadOS 26.3.1): built, installed and launched in 32 s. See DEVELOPMENT.md.
+
 **Not yet verified:** running on the real iPad; in-app Bluetooth pairing; the Songs sheet and import picker by hand.
 
 ## Next steps (in order)
 
 0. User to try **one-hand practice** (tap a clef in wait mode). Open questions: should a one-hand run count towards the
    song's progress (maybe its own mark)? Should timed mode get it too? Should the choice stay when opening another song?
+0. User to try **dragging the staff** (wait and timed). Is the drag speed right (the music follows the pointer 1:1)?
+   Should timed mode keep playing straight after the drag, without the one-bar count-in?
 
 0. User to read the guide PDF and try the **Reading Guide** drills (wait mode, then fingers hidden). Change or add
    chapters/drills on request, then rebuild with `docs/guide/build.sh`.

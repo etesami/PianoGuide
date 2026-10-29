@@ -23,6 +23,10 @@ public struct TimedModeEngine: Sendable {
     public private(set) var hitNotes: Set<Int> = []
     public private(set) var missedNotes: Set<Int> = []
     public private(set) var wrongCount = 0
+    /// The furthest the playhead has moved by playing (not by seeking).
+    private var furthestBeat: Double
+    /// Set when the player sought past the furthest point they had played to, so the run can't count as a full play.
+    public private(set) var skippedAhead = false
     private var heldCorrect: Set<UInt8> = []
     private var heldWrong: Set<UInt8> = []
 
@@ -31,6 +35,7 @@ public struct TimedModeEngine: Sendable {
         self.early = early
         self.late = late
         self.beat = startBeat
+        self.furthestBeat = startBeat
     }
 
     public var isFinished: Bool { judgedCount >= steps.count }
@@ -40,10 +45,24 @@ public struct TimedModeEngine: Sendable {
     /// Moves the playhead forward and judges every step whose window has passed.
     public mutating func advance(to beat: Double) {
         self.beat = beat
+        if !skippedAhead { furthestBeat = max(furthestBeat, beat) }
         while judgedCount < steps.count, steps[judgedCount].startBeat + late < beat {
             for id in steps[judgedCount].noteIDs where !hitNotes.contains(id) { missedNotes.insert(id) }
             judgedCount += 1
         }
+    }
+
+    /// Moves the playhead (dragging the staff) without judging anything on the way. Going back opens the notes from
+    /// there again (their hits and misses are forgotten); going forward leaves the skipped notes unjudged.
+    /// The wrong-note count is kept.
+    public mutating func seek(to beat: Double) {
+        let first = steps.firstIndex { $0.startBeat + late >= beat } ?? steps.count
+        for step in steps[min(first, judgedCount)...] {
+            for id in step.noteIDs { hitNotes.remove(id); missedNotes.remove(id) }
+        }
+        judgedCount = first
+        self.beat = beat
+        if beat > furthestBeat + 1e-6 { skippedAhead = true }
     }
 
     /// A key pressed at the current playhead: it hits the closest unplayed note of that pitch in its window.

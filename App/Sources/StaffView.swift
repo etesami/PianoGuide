@@ -9,7 +9,8 @@ import SwiftUI
 /// With `fitBeats` set it is a still picture instead (music examples in lesson notes): no cursor, and that many
 /// beats from the start fill the width.
 /// With `soloClef` set (one-hand practice) the other staff's clef and notes are greyed out; `onClefTap` is called
-/// when a clef is tapped.
+/// when a clef is tapped. `onDrag` reports a sideways drag of the staff in beats (positive = to the right, i.e. back
+/// in the song) and whether it has ended.
 struct StaffView: View, Animatable {
     var song: Song
     var noteStates: [Int: WaitModeEngine.NoteState] = [:]
@@ -19,6 +20,7 @@ struct StaffView: View, Animatable {
     var showFingers = true
     var soloClef: Clef? = nil
     var onClefTap: ((Clef) -> Void)? = nil
+    var onDrag: ((_ beats: Double, _ ended: Bool) -> Void)? = nil
 
     var animatableData: Double {
         get { scrollBeat }
@@ -34,6 +36,10 @@ struct StaffView: View, Animatable {
                 // Above the gap between the staves is the treble clef, below it the bass clef.
                 onClefTap(location.y < m.trebleBottom + m.sp ? .treble : .bass)
             }
+            .gesture(DragGesture(minimumDistance: 8)
+                        .onChanged { onDrag?(Double($0.translation.width / metrics(geo.size).pxPerBeat), false) }
+                        .onEnded { onDrag?(Double($0.translation.width / metrics(geo.size).pxPerBeat), true) },
+                     including: onDrag == nil ? .none : .all)
         }
     }
 

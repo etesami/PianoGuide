@@ -57,6 +57,10 @@ public struct WaitModeEngine: Sendable {
     private var heldCorrect: Set<UInt8> = []
     private var heldWrong: Set<UInt8> = []
     private var wrongInCurrentStep = false
+    /// The furthest step reached by playing (not by jumping).
+    private var furthestIndex = 0
+    /// Set when the player jumped past the furthest step they had played to, so the run can't count as a full play.
+    public private(set) var skippedAhead = false
 
     public init(steps: [PracticeStep]) {
         self.steps = steps
@@ -82,6 +86,7 @@ public struct WaitModeEngine: Sendable {
         if hitInCurrentStep == step.pitches {
             let completed = currentIndex
             currentIndex += 1
+            if !skippedAhead { furthestIndex = max(furthestIndex, currentIndex) }
             hitInCurrentStep = []
             wrongInCurrentStep = false
             return .stepCompleted(index: completed)
@@ -133,5 +138,20 @@ public struct WaitModeEngine: Sendable {
         hitInCurrentStep = []
         wrongCount = 0
         wrongInCurrentStep = false
+        furthestIndex = currentIndex
+        skippedAhead = false
+    }
+
+    /// Moves to another step (dragging the staff), keeping the wrong-note count.
+    public mutating func jump(to index: Int) {
+        currentIndex = max(0, min(index, steps.count - 1))
+        hitInCurrentStep = []
+        wrongInCurrentStep = false
+        if currentIndex > furthestIndex { skippedAhead = true }
+    }
+
+    /// The step whose start is closest to `beat`.
+    public func stepIndex(nearest beat: Double) -> Int {
+        steps.indices.min { abs(steps[$0].startBeat - beat) < abs(steps[$1].startBeat - beat) } ?? 0
     }
 }

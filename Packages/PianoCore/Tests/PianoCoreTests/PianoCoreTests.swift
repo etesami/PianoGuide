@@ -259,6 +259,26 @@ final class WaitModeTests: XCTestCase {
         XCTAssertEqual(PracticeSteps.make(from: notes, hands: [.right])[0].pitches, [60, 64], "hand filter")
     }
 
+    func testJumpKeepsWrongNotesAndNoticesSkipping() {
+        let notes = (0..<4).map { NoteEvent(id: $0, pitch: UInt8(60 + $0), startBeat: Double($0), durationBeats: 1, velocity: 80) }
+        var engine = WaitModeEngine(steps: PracticeSteps.make(from: notes))
+        _ = engine.noteOn(60)
+        _ = engine.noteOn(70)
+        _ = engine.noteOn(61)
+        XCTAssertEqual(engine.stepIndex(nearest: 0.4), 0)
+        XCTAssertEqual(engine.stepIndex(nearest: 2.6), 3)
+        engine.jump(to: engine.stepIndex(nearest: 0.2))
+        XCTAssertEqual(engine.currentIndex, 0)
+        XCTAssertEqual(engine.wrongCount, 1)
+        XCTAssertFalse(engine.skippedAhead)
+        engine.jump(to: 2)
+        XCTAssertFalse(engine.skippedAhead, "step 2 was reached by playing")
+        engine.jump(to: 3)
+        XCTAssertTrue(engine.skippedAhead)
+        engine.reset()
+        XCTAssertFalse(engine.skippedAhead)
+    }
+
     func testOneClefOnly() {
         let notes = [
             NoteEvent(id: 0, pitch: 60, startBeat: 0, durationBeats: 1, velocity: 80, hand: .right),
@@ -477,6 +497,26 @@ final class TimedModeTests: XCTestCase {
         XCTAssertEqual(engine.wrongCount, 2)
         XCTAssertEqual(engine.noteStates, [0: .played, 1: .missed, 2: .played, 3: .played, 4: .missed])
         XCTAssertEqual(engine.noteCount, 5)
+    }
+
+    func testSeekBackOpensNotesAgainAndForwardSkips() {
+        var engine = TimedModeEngine(steps: PracticeSteps.make(from: notes), early: 0.5, late: 0.5, startBeat: -4)
+        engine.advance(to: 0)
+        _ = engine.noteOn(60)
+        _ = engine.noteOn(50)
+        engine.advance(to: 2.5)
+        XCTAssertEqual(engine.missedNotes, [1, 2, 3])
+        engine.seek(to: 0.8)
+        XCTAssertEqual(engine.judgedCount, 1, "the chord at 0 stays judged, the D's are open again")
+        XCTAssertEqual(engine.hitNotes, [0])
+        XCTAssertEqual(engine.missedNotes, [1])
+        XCTAssertEqual(engine.wrongCount, 1, "wrong notes are kept")
+        XCTAssertFalse(engine.skippedAhead, "going back is not skipping")
+        engine.advance(to: 1.2)
+        XCTAssertFalse(engine.skippedAhead, "still behind where it was before")
+        engine.seek(to: 3)
+        XCTAssertTrue(engine.skippedAhead)
+        XCTAssertEqual(engine.missedNotes, [1], "skipped notes are not counted as missed")
     }
 
     func testLateSideIsWider() {

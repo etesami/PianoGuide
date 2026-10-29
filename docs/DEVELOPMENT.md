@@ -85,6 +85,11 @@ Bluetooth also works on the Mac: pair the piano in Audio MIDI Setup → MIDI Stu
    **Settings → General → VPN & Device Management** → trust your developer certificate.
 5. With a free Apple ID the app stops launching after **7 days**. Press Run again in Xcode to re-sign it.
 
+**Without opening Xcode:** `scripts/install-ipad.sh` lists the paired iPads, asks which one (skipped if there is only
+one), then builds, installs and launches the app (`xcodebuild` + `xcrun devicectl`). It builds into Xcode's own
+DerivedData, so it shares the build cache with Xcode (about 30 s when little changed). The iPad must have been paired
+once (steps 1 and 4 above); after that it also works over Wi-Fi.
+
 ## Connect the Roland FP-30X
 
 1. Turn on the piano's Bluetooth. Press the button to switch to MIDI mode if needed; see the FP-30X manual for "Bluetooth MIDI".
