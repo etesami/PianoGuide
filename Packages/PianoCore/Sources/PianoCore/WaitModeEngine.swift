@@ -150,6 +150,11 @@ public struct WaitModeEngine: Sendable {
         if currentIndex > furthestIndex { skippedAhead = true }
     }
 
+    /// The first step starting at or after `beat` (the last step if there is none).
+    public func stepIndex(from beat: Double) -> Int {
+        steps.firstIndex { $0.startBeat >= beat - 1e-6 } ?? max(0, steps.count - 1)
+    }
+
     /// The step whose start is closest to `beat`.
     public func stepIndex(nearest beat: Double) -> Int {
         steps.indices.min { abs(steps[$0].startBeat - beat) < abs(steps[$1].startBeat - beat) } ?? 0

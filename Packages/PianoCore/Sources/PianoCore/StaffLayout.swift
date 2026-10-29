@@ -94,4 +94,12 @@ extension Song {
         }
         return bars
     }
+
+    /// Beat where each bar starts (the first bar at 0); one entry per bar.
+    public var barStartBeats: [Double] { [0] + barlineBeats.dropLast() }
+
+    /// Index (0 = first bar) of the bar holding `beat`.
+    public func barIndex(atBeat beat: Double) -> Int {
+        barStartBeats.lastIndex { $0 <= beat + 1e-6 } ?? 0
+    }
 }

@@ -6,7 +6,7 @@ import SwiftUI
 /// Picking a song that has a lesson note shows the note first; the book button shows it again.
 /// In timed mode, Listen plays the song by itself at the chosen speed.
 /// In wait mode, tapping a clef practises only that hand; tapping a clef again goes back to both hands.
-/// Dragging the staff sideways moves through the song (to the right = back).
+/// Dragging the staff sideways moves through the song (to the right = back); the bar slider and ◀ ▶ under it jump by bars.
 struct PracticeView: View {
     @EnvironmentObject private var midi: MIDIInputService
     @StateObject private var library = SongLibrary()
@@ -51,6 +51,7 @@ struct PracticeView: View {
             VStack(spacing: 16) {
                 header
                 staff
+                if song != nil, !listen.isPlaying { barControls }
                 Spacer()
                 KeyboardView(range: keyboardRange,
                              states: keyStates,
@@ -275,22 +276,70 @@ struct PracticeView: View {
     /// Wait mode lands on the nearest step; timed mode pauses, and if it was playing goes on after a one-bar count-in.
     private func dragStaff(by beats: Double, ended: Bool) {
         guard song != nil else { return }
-        let lastStep = (timedMode ? timed.engine.steps.last : engine.steps.last)?.startBeat ?? 0
-        if dragFrom == nil {
-            closeResult()
-            dragFrom = timedMode ? max(0, timed.engine.beat) : engine.currentStep?.startBeat ?? lastStep
-            resumeAfterDrag = timedMode && timed.isPlaying
-            timed.pause()
+        beginMove()
+        let target = min(max((dragFrom ?? 0) - beats, 0), lastStepBeat)
+        if ended { move(to: target, nearest: true) } else { dragBeat = target }
+    }
+
+    /// ◀ slider ▶ under the staff: jump by whole bars. ◀ goes to the start of the bar (or the bar before, if
+    /// already there); the slider shows the music while it moves and jumps when it is let go.
+    private var barControls: some View {
+        let starts = song?.barStartBeats ?? [0]
+        let bar = song?.barIndex(atBeat: dragBeat ?? currentBeat) ?? 0
+        let sliderBar = Binding<Double>(
+            get: { Double(bar) },
+            set: { beginMove(); dragBeat = starts[min(max(Int($0.rounded()), 0), starts.count - 1)] })
+        return HStack(spacing: 16) {
+            Button {
+                guard let back = starts.last(where: { $0 < currentBeat - 1e-6 }) else { return }
+                beginMove(); move(to: back, nearest: false)
+            } label: { Label("Bar Back", systemImage: "backward.end.fill") }
+            Slider(value: sliderBar, in: 0...Double(max(starts.count - 1, 1)), step: 1) { editing in
+                if !editing, let dragBeat { move(to: dragBeat, nearest: false) }
+            }
+            .disabled(starts.count < 2)
+            Button {
+                guard let ahead = starts.first(where: { $0 > currentBeat + 1e-6 }) else { return }
+                beginMove(); move(to: ahead, nearest: false)
+            } label: { Label("Bar Ahead", systemImage: "forward.end.fill") }
+            Text("Bar \(bar + 1) of \(starts.count)")
+                .monospacedDigit()
+                .frame(minWidth: 110, alignment: .leading)
         }
-        let target = min(max((dragFrom ?? 0) - beats, 0), lastStep)
-        guard ended else { dragBeat = target; return }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.bordered)
+    }
+
+    /// The beat at the cursor now (the current step in wait mode, the playhead in timed mode).
+    private var currentBeat: Double {
+        timedMode ? max(0, timed.engine.beat) : engine.currentStep?.startBeat ?? lastStepBeat
+    }
+
+    private var lastStepBeat: Double {
+        (timedMode ? timed.engine.steps.last : engine.steps.last)?.startBeat ?? 0
+    }
+
+    /// Starts moving through the song (a drag, the slider or a bar button): closes the result card and pauses timed mode,
+    /// remembering whether it was playing.
+    private func beginMove() {
+        guard dragFrom == nil else { return }
+        closeResult()
+        dragFrom = currentBeat
+        resumeAfterDrag = timedMode && timed.isPlaying
+        timed.pause()
+    }
+
+    /// Puts the song at `beat`. Wait mode lands on the nearest step (a drag) or the first step from there (a bar);
+    /// timed mode goes on from there after a count-in if it was playing.
+    private func move(to beat: Double, nearest: Bool) {
+        let target = min(max(beat, 0), lastStepBeat)
         dragFrom = nil
         dragBeat = nil
         if timedMode {
             timed.seek(to: target, resume: resumeAfterDrag)
         } else {
             releaseLatched()
-            engine.jump(to: engine.stepIndex(nearest: target))
+            engine.jump(to: nearest ? engine.stepIndex(nearest: target) : engine.stepIndex(from: target))
         }
     }
 

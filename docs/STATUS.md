@@ -233,6 +233,14 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   33 tests pass; seen in the Catalyst app with real mouse drags (posted with CGEvent): wait mode ahead to step 8 and back
   to step 4; timed mode ahead with "missed 0". **Not verified:** the count-in after a drag (pressing Play), dragging on
   the iPad (touch), and how a drag feels together with a clef tap.
+- **Jump by bars** (session 22, user's request: dragging is slow for going back a few sections): a row under the staff
+  (wait and timed mode, hidden while Listen plays) with **◀** (start of this bar, or the bar before if already there),
+  a **slider** over the whole song (one stop per bar; the staff follows while sliding, the song jumps when it is let go)
+  and **▶** (next bar), plus "Bar N of M". Wait mode lands on the first step from the bar start
+  (`WaitModeEngine.stepIndex(from:)`); timed mode seeks like a drag (count-in if it was playing). Bars come from
+  `Song.barStartBeats` / `barIndex(atBeat:)` (first time signature's bar grid; tested). Same rules as dragging:
+  wrong notes kept, jumping ahead isn't recorded as completed. 33 tests pass; seen in the Catalyst app with real mouse
+  events: slider to bar 9 (step 25), then ◀ to bar 8 (step 24). **Not verified:** timed mode with the bar row, touch on iPad.
 
 - **Install on the iPad from the command line** (session 22, user's request): `scripts/install-ipad.sh` lists the paired
   iPads, asks which one, builds (Xcode's own DerivedData, shared with Xcode), installs and launches (`xcrun devicectl`).
@@ -244,6 +252,7 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
 
 0. User to try **one-hand practice** (tap a clef in wait mode). Open questions: should a one-hand run count towards the
    song's progress (maybe its own mark)? Should timed mode get it too? Should the choice stay when opening another song?
+0. User to try the **bar row** (◀ slider ▶): is one stop per bar right, or should it jump by phrases (4 bars)?
 0. User to try **dragging the staff** (wait and timed). Is the drag speed right (the music follows the pointer 1:1)?
    Should timed mode keep playing straight after the drag, without the one-bar count-in?
 
