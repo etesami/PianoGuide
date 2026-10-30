@@ -11,6 +11,7 @@ import SwiftUI
 /// With `soloClef` set (one-hand practice) the other staff's clef and notes are greyed out; `onClefTap` is called
 /// when a clef is tapped. `onDrag` reports a sideways drag of the staff in beats (positive = to the right, i.e. back
 /// in the song) and whether it has ended.
+/// With `showMeasures` off (the note drill) there is no time signature and there are no bar lines.
 struct StaffView: View, Animatable {
     var song: Song
     var noteStates: [Int: WaitModeEngine.NoteState] = [:]
@@ -18,6 +19,7 @@ struct StaffView: View, Animatable {
     var scrollBeat: Double
     var fitBeats: Double? = nil
     var showFingers = true
+    var showMeasures = true
     var soloClef: Clef? = nil
     var onClefTap: ((Clef) -> Void)? = nil
     var onDrag: ((_ beats: Double, _ ended: Bool) -> Void)? = nil
@@ -54,7 +56,7 @@ struct StaffView: View, Animatable {
             drawClefsAndTime(&context, m)
             var music = context
             music.clip(to: Path(CGRect(x: m.musicStartX, y: 0, width: size.width - m.musicStartX, height: size.height)))
-            drawBarlines(&music, m)
+            if showMeasures { drawBarlines(&music, m) }
             drawNotes(&music, m)
             if fitBeats == nil { drawCursor(&context, m) }
             for pitch in wrongPitches {
@@ -137,6 +139,7 @@ struct StaffView: View, Animatable {
                      at: CGPoint(x: m.staffLeft + m.sp * 2, y: m.y(.treble, position: 3)))
         context.draw(Text("\u{1D122}").font(.system(size: m.sp * 5.5)).foregroundColor(ink(.bass)),
                      at: CGPoint(x: m.staffLeft + m.sp * 2.2, y: m.y(.bass, position: 7)))
+        guard showMeasures else { return }
         let sig = song.initialTimeSignature
         for clef in [Clef.treble, .bass] {
             for (number, position) in [(sig.numerator, 6), (sig.denominator, 2)] {

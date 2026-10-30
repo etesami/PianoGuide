@@ -107,6 +107,7 @@ once (steps 1 and 4 above); after that it also works over Wi-Fi.
 | `…/FingerSongs.swift` | `FingerPractice`: five-finger coordination drills (pairs, skips, mirror, parallel) |
 | `…/TestSongs.swift` | Songs for trying the import ("Ode to Joy", "Minuet in G"); written to `TestSongs/` |
 | `…/WaitModeEngine.swift` | `PracticeSteps` (chord grouping) and the wait-mode state machine |
+| `…/NoteDrill.swift` | Notes mode: endless random notes from a song, judged by a `WaitModeEngine` |
 | `…/StaffLayout.swift` | Staff positions (clef, line/space, sharps, ledger lines), `NoteValue`, bar lines |
 | `…/PracticeResult.swift` | Result of a finished run (perfect / almost / needs practice), shown by `PracticeResultView` |
 | `…/SongProgress.swift` | Per-song progress: times completed, recent wrong notes, "difficult" rule (mistakes > 10% of the notes); the user's own `SongMark` (hard / interesting) |

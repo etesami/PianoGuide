@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-10-28 (session 22: one-hand practice by tapping a clef; drag the staff to move through the song)
+Last updated: 2026-10-30 (session 23: Notes mode, a note-finding drill)
 
 ## Where we are
 
@@ -246,10 +246,28 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   iPads, asks which one, builds (Xcode's own DerivedData, shared with Xcode), installs and launches (`xcrun devicectl`).
   Ran it on "Ehsan's iPad" (iPad13,16, iPadOS 26.3.1): built, installed and launched in 32 s. See DEVELOPMENT.md.
 
+- **Notes mode: note-finding drill** (session 23, user's request: "I cannot quickly identify notes on the keyboard"):
+  a third segment **Notes** in the mode switch (Wait / Timed / Notes). It shows **one note at a time** at the cursor
+  (whole note, no time signature or bar lines: `StaffView.showMeasures = false`), picked at random from the
+  **distinct pitches the open song uses** on that staff, endlessly, until another mode is picked. A hand picker in the header
+  (**Both Hands / Right Hand / Left Hand**; tapping a clef works too, as in wait mode): with both hands each prompt is
+  **one treble note and one bass note pressed together** (user's choice); if the song has no notes on one staff, both
+  hands gives single notes from the other. A prompt never repeats the one before. Judging is wait mode's
+  (`NoteDrill` wraps a `WaitModeEngine` and appends a new step after each one is done; `WaitModeEngine.append`), so
+  wrong keys are red, the needed keys turn orange, the screen flashes; header shows "Found N · wrong notes: M".
+  Key labels follow the Aa button (user's choice). Leaving Notes goes back to wait/timed **where they were** (not reset);
+  timed mode and Listen are paused on entering. Restart or changing the hand starts the drill afresh; opening another
+  song rebuilds it from that song. Nothing is recorded in song progress. 3 new tests (36 pass); seen in the Catalyst app
+  with real mouse events: Notes → F#4 shown; C4 → "wrong notes: 1", F#4 key orange; F#4 → "Found 1", next note G4.
+  **Not verified:** both hands with a two-hand song in the app (unit-tested only), the real piano, the iPad.
+
 **Not yet verified:** running on the real iPad; in-app Bluetooth pairing; the Songs sheet and import picker by hand.
 
 ## Next steps (in order)
 
+0. User to try **Notes mode** (the note drill). Open questions: should it pick notes evenly (now) or by how often the song
+   uses them? A score/streak or timer ("how fast did I find it")? Show the note's name after a wrong key? The sharp sign
+   sits on the cursor line (same as in wait mode); move the note right if it bothers.
 0. User to try **one-hand practice** (tap a clef in wait mode). Open questions: should a one-hand run count towards the
    song's progress (maybe its own mark)? Should timed mode get it too? Should the choice stay when opening another song?
 0. User to try the **bar row** (◀ slider ▶): is one stop per bar right, or should it jump by phrases (4 bars)?

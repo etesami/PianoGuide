@@ -49,7 +49,7 @@ public struct WaitModeEngine: Sendable {
         case missed     // part of the current step, not pressed yet, after a wrong note in this step
     }
 
-    public let steps: [PracticeStep]
+    public private(set) var steps: [PracticeStep]
     public private(set) var currentIndex = 0
     public private(set) var hitInCurrentStep: Set<UInt8> = []
     public private(set) var wrongCount = 0
@@ -148,6 +148,11 @@ public struct WaitModeEngine: Sendable {
         hitInCurrentStep = []
         wrongInCurrentStep = false
         if currentIndex > furthestIndex { skippedAhead = true }
+    }
+
+    /// Adds a step at the end (the note drill makes its notes as it goes).
+    public mutating func append(_ step: PracticeStep) {
+        steps.append(step)
     }
 
     /// The first step starting at or after `beat` (the last step if there is none).
