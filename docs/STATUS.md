@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-11-01 (session 27: song overview looks for repeats in one hand)
+Last updated: 2026-11-01 (session 28: README with screenshots)
 
 ## Where we are
 
@@ -308,6 +308,9 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   iPad simulator on Hands 4 (both: none; left: A B A C). **Not verified:** landscape, a long real piece.
 
 **Not yet verified:** running on the real iPad; in-app Bluetooth pairing; the Songs sheet and import picker by hand.
+
+- **README with screenshots** (session 28): `README.md` rewritten, images in `docs/screenshots/` (iPad Pro 11-inch simulator, Ode to Joy).
+  How they were taken is in [DEVELOPMENT.md](DEVELOPMENT.md#retake-the-readme-screenshots); retake them when the screens change.
 
 ## Next steps (in order)
 

@@ -164,7 +164,8 @@ PianoGuide/
 ├── project.yml                 # XcodeGen spec → PianoGuide.xcodeproj (generated, git-ignored)
 ├── docs/
 │   ├── STATUS.md               # progress, next steps, known issues (keep up to date)
-│   └── DEVELOPMENT.md          # environment, build, test, install on iPad
+│   ├── DEVELOPMENT.md          # environment, build, test, install on iPad
+│   └── screenshots/            # images used by README.md
 ├── scripts/check-core.sh       # runs the PianoCore unit tests (swift test)
 ├── TestSongs/                  # .mid files for trying the import (generated from PianoCore TestSongs)
 ├── App/

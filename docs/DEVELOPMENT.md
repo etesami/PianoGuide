@@ -60,6 +60,14 @@ To see what the app received, add a temporary `NSLog` and read it back:
 xcrun simctl spawn $SIM log show --last 2m --style compact --predicate 'eventMessage CONTAINS "DBG"'
 ```
 
+## Retake the README screenshots
+
+The images in `docs/screenshots/` were taken with a throwaway XCUITest (not in the repo), which can tap and rotate without moving the Mac's mouse:
+a temporary copy of the repo with a `bundle.ui-testing` target in `project.yml`, run on a temporary simulator with Ode to Joy copied in (as above).
+`simctl status_bar … override` sets the clock. Each test screenshot comes out sideways with EXIF orientation data, so rotate the pixels and drop the metadata
+(1400 px wide, with Pillow; `sips -r` keeps the EXIF data and the image then looks wrong in some viewers).
+Don't press Play in Timed mode with nobody playing: the misses make the song show as Difficult in the library.
+
 ## Test with the piano on the Mac (Mac Catalyst)
 
 The simulator can't see MIDI devices plugged into the Mac, so to play the real FP-30X on the dev Mac,
