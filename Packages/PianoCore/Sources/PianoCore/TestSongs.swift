@@ -91,7 +91,7 @@ public enum TestSongs {
     private static func numbered(_ notes: [NoteEvent]) -> [NoteEvent] {
         notes.sorted { ($0.startBeat, $0.pitch) < ($1.startBeat, $1.pitch) }.enumerated().map { i, n in
             NoteEvent(id: i, pitch: n.pitch, startBeat: n.startBeat, durationBeats: n.durationBeats,
-                      velocity: n.velocity, hand: n.hand)
+                      velocity: n.velocity, hand: n.hand, finger: n.finger)
         }
     }
 }

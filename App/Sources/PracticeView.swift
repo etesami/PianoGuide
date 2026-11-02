@@ -4,6 +4,13 @@ import SwiftUI
 /// Main screen: the chosen song (a bundled sample or an imported .mid) on a scrolling grand staff, in wait mode
 /// (the song waits for each note) or timed mode (it moves on at the chosen speed with a metronome; misses are counted).
 /// Picking a song that has a lesson note shows the note first; the book button shows it again.
+/// In timed mode, Listen plays the song by itself at the chosen speed.
+/// In wait mode, tapping a clef practises only that hand; tapping a clef again goes back to both hands.
+/// Dragging the staff sideways moves through the song (to the right = back); the bar slider and ◀ ▶ under it jump by bars.
+/// Notes mode is a drill: random notes from the song, one at a time (one per staff with both hands), until another mode
+/// is picked; the wait and timed runs are left where they were.
+/// The Overview button swaps the practice screen for the whole song in small staves, with its repeats marked; the keys are
+/// not judged meanwhile, and the song stays where it was.
 struct PracticeView: View {
     @EnvironmentObject private var midi: MIDIInputService
     @StateObject private var library = SongLibrary()
@@ -18,6 +25,24 @@ struct PracticeView: View {
     /// The last song picked, as a file name ("twinkle.mid"); imported songs are looked up first.
     @AppStorage("lastSong") private var lastSong = ""
     @State private var engine = WaitModeEngine(steps: [])
+    /// Wait mode with one hand only: the staff whose notes are waited for (nil = both hands).
+    /// One-hand runs are not recorded in the song's progress.
+    @State private var soloClef: Clef?
+    /// Notes mode (the note drill) is on while this is set.
+    @State private var drill: NoteDrill?
+    /// The drill's hand: the staff its notes come from (nil = both, one note on each staff).
+    @State private var drillClef: Clef?
+    private static let drillStatsKey = "noteDrillStats"
+    /// The song overview is showing. Off at launch, so the app always opens ready to practise.
+    @State private var showOverview = false
+    /// While the staff is being dragged: the beat it started from, and the beat now under the cursor.
+    @State private var dragFrom: Double?
+    @State private var dragBeat: Double?
+    /// The bar the slider was last let go on, and when. Its thumb goes on settling for about 0.5 s and keeps sending values,
+    /// with no end event after them. Those only correct where the song lands: as a new move they would pin the staff there.
+    @State private var sliderRelease: (bar: Int, time: Date)?
+    /// Timed mode was playing when the drag started, so it goes on (after a count-in) when the drag ends.
+    @State private var resumeAfterDrag = false
     @State private var loadError: String?
     @State private var showPairing = false
     @State private var flash: Color = .clear
@@ -25,26 +50,35 @@ struct PracticeView: View {
     /// so chords can be played with a mouse (simulator, Mac). The real piano is unaffected.
     @State private var latched: Set<UInt8> = []
     @AppStorage("showKeyLabels") private var showKeyLabels = true
+    @AppStorage("showFingers") private var showFingers = true
     @AppStorage("timedMode") private var timedMode = false
     /// Timed mode's speed as a fraction of the song's own tempo.
     @AppStorage("timedSpeed") private var speed = 0.75
     @StateObject private var timed = TimedSession()
+    /// Listen: the app plays the song by itself at the timed-mode speed.
+    @StateObject private var listen = AutoPlayer()
     /// Shown as a card over the screen when a song has been played to the end.
     @State private var result: PracticeResult?
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
-                header
-                staff
-                Spacer()
-                KeyboardView(range: keyboardRange,
-                             states: timedMode ? timed.engine.keyStates : engine.keyStates,
-                             pressed: midi.pressed,
-                             showLabels: showKeyLabels,
-                             onPress: { midi.simulate(.noteOn(pitch: $0, velocity: 100)) },
-                             onRelease: releaseOnScreenKey)
-                    .frame(height: 180)
+                if showOverview, let song {
+                    SongOverviewView(song: song, showFingers: showFingers)
+                        .id(songEntry?.url)
+                } else {
+                    header
+                    staff
+                    if song != nil, !listen.isPlaying, drill == nil { barControls }
+                    Spacer()
+                    KeyboardView(range: keyboardRange,
+                                 states: keyStates,
+                                 pressed: midi.pressed,
+                                 showLabels: showKeyLabels,
+                                 onPress: { midi.simulate(.noteOn(pitch: $0, velocity: 100)) },
+                                 onRelease: releaseOnScreenKey)
+                        .frame(height: 180)
+                }
             }
             .padding()
             .background(flash.opacity(0.15).animation(.easeOut(duration: 0.3), value: flash))
@@ -59,22 +93,32 @@ struct PracticeView: View {
             .navigationTitle(song?.title ?? "PianoGuide")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { timed.pause(); showLibrary = true } label: { Label("Songs", systemImage: "music.note.list") }
+                    Button { pauseAll(); showLibrary = true } label: { Label("Songs", systemImage: "music.note.list") }
                 }
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Restart") { closeResult(); releaseLatched(); recordAbandoned(); engine.reset(); timed.restart() }
+                    Button("Restart") {
+                        if drill != nil { startDrill(); return }
+                        listen.stop(); closeResult(); releaseLatched(); recordAbandoned(); engine.reset(); timed.restart()
+                    }
                 }
                 ToolbarItem(placement: modeSwitchPlacement) {
-                    Picker("Mode", selection: $timedMode) {
-                        Text("Wait").tag(false)
-                        Text("Timed").tag(true)
+                    Picker("Mode", selection: mode) {
+                        Text("Wait").tag(Mode.wait)
+                        Text("Timed").tag(Mode.timed)
+                        Text("Notes").tag(Mode.notes)
                     }
                     .pickerStyle(.segmented)
-                    .frame(width: 160)
+                    .frame(width: 240)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    if song != nil, drill == nil {
+                        Toggle(isOn: $showOverview) { Label("Song Overview", systemImage: "rectangle.grid.1x2") }
+                            .toggleStyle(.button)
+                    }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     if note != nil {
-                        Button { timed.pause(); showNote = true } label: { Label("Lesson Note", systemImage: "text.book.closed") }
+                        Button { pauseAll(); showNote = true } label: { Label("Lesson Note", systemImage: "text.book.closed") }
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -95,7 +139,12 @@ struct PracticeView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { timed.pause(); showPairing = true } label: { Label("Bluetooth MIDI", systemImage: "dot.radiowaves.left.and.right") }
+                    Button { showFingers.toggle() } label: {
+                        Label(showFingers ? "Hide Finger Numbers" : "Show Finger Numbers", systemImage: "textformat.123")
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { pauseAll(); showPairing = true } label: { Label("Bluetooth MIDI", systemImage: "dot.radiowaves.left.and.right") }
                 }
             }
             .sheet(isPresented: $showPairing, onDismiss: midi.connectAllSources) {
@@ -112,15 +161,42 @@ struct PracticeView: View {
             }
         }
         .onAppear(perform: load)
+        .onChange(of: library.imported) { _, imported in
+            // The open song was deleted from the library: switch to a sample (nothing is recorded for it).
+            guard let songEntry, !songEntry.isSample, !imported.contains(songEntry) else { return }
+            self.songEntry = nil
+            if let first = library.samples.first { open(first) }
+        }
         .onChange(of: timedMode) { wasTimed, _ in
             installMIDIHandler()
+            listen.stop()
             closeResult()
             releaseLatched()
             recordAbandoned(timed: wasTimed)
             engine.reset()
             timed.restart()
         }
-        .onChange(of: speed) { _, new in timed.setSpeed(new) }
+        .onChange(of: speed) { _, new in timed.setSpeed(new); listen.setSpeed(new) }
+        .onChange(of: showOverview) { _, isOn in
+            guard isOn else { return }
+            pauseAll()
+            closeResult()
+            releaseLatched()
+        }
+    }
+
+    private enum Mode { case wait, timed, notes }
+
+    /// The mode switch. Notes is on top of the other two: leaving it goes back to the chosen mode where it was
+    /// (wait and timed are only reset when switching between them, as before).
+    private var mode: Binding<Mode> {
+        Binding(get: { drill != nil ? .notes : timedMode ? .timed : .wait },
+                set: { new in
+                    if new == .notes { startDrill(); return }
+                    drill = nil
+                    releaseLatched()
+                    timedMode = new == .timed
+                })
     }
 
     /// The Mac (Catalyst) title bar doesn't show `.principal` items, so there the switch goes next to Restart.
@@ -138,12 +214,15 @@ struct PracticeView: View {
                                           : "Connected: " + midi.sourceNames.joined(separator: ", "))
                 .font(.subheadline).foregroundColor(.secondary)
             if let loadError = loadError { Text(loadError).foregroundColor(.red) }
-            if timedMode {
+            if let drill {
+                drillControls(drill)
+            } else if timedMode {
                 timedControls
             } else {
-                Text(engine.isFinished && !engine.steps.isEmpty
-                     ? "Finished! Wrong notes: \(engine.wrongCount)"
-                     : "Step \(engine.currentIndex + 1) of \(engine.steps.count) · wrong notes: \(engine.wrongCount)")
+                Text((engine.isFinished && !engine.steps.isEmpty
+                      ? "Finished! Wrong notes: \(engine.wrongCount)"
+                      : "Step \(engine.currentIndex + 1) of \(engine.steps.count) · wrong notes: \(engine.wrongCount)")
+                     + (soloClef == .treble ? " · right hand only" : soloClef == .bass ? " · left hand only" : ""))
                     .font(.headline)
             }
         }
@@ -155,15 +234,22 @@ struct PracticeView: View {
         let percent = Int((speed * 100).rounded())
         let bpm = Int(((song?.bpm(atBeat: max(0, e.beat)) ?? 120) * speed).rounded())
         return HStack(spacing: 20) {
-            Button { timed.togglePlay() } label: {
+            Button { listen.stop(); timed.togglePlay() } label: {
                 Label(timed.isPlaying ? "Pause" : "Play", systemImage: timed.isPlaying ? "pause.fill" : "play.fill")
                     .frame(minWidth: 90)
             }
             .buttonStyle(.borderedProminent)
             .disabled(song == nil)
+            Button { toggleListen() } label: {
+                Label(listen.isPlaying ? "Stop" : "Listen", systemImage: listen.isPlaying ? "stop.fill" : "speaker.wave.2.fill")
+                    .frame(minWidth: 90)
+            }
+            .buttonStyle(.bordered)
+            .disabled(song == nil)
             Stepper("Speed \(percent)% · \(bpm) BPM", value: $speed, in: 0.25...1.5, step: 0.05)
                 .fixedSize()
-            Text(e.isFinished && !e.steps.isEmpty
+            Text(listen.isPlaying ? "Listening: the song plays by itself at this speed"
+                 : e.isFinished && !e.steps.isEmpty
                  ? "Finished! Played \(e.hitNotes.count) of \(e.noteCount) · missed \(e.missedCount) · wrong \(e.wrongCount)"
                  : timed.hasStarted
                     ? "Played \(e.hitNotes.count) of \(e.noteCount) · missed \(e.missedCount) · wrong \(e.wrongCount)"
@@ -172,22 +258,79 @@ struct PracticeView: View {
         }
     }
 
+    private func drillControls(_ drill: NoteDrill) -> some View {
+        HStack(spacing: 20) {
+            Picker("Hand", selection: Binding(get: { drillClef }, set: setDrillClef)) {
+                Text("Both Hands").tag(Clef?.none)
+                Text("Right Hand").tag(Clef?.some(.treble))
+                Text("Left Hand").tag(Clef?.some(.bass))
+            }
+            .pickerStyle(.segmented)
+            .fixedSize()
+            Text(drill.hasNotes ? "Found \(drill.foundCount) · wrong notes: \(drill.engine.wrongCount)"
+                                : "This song has no notes for that hand")
+                .font(.headline)
+        }
+    }
+
     @ViewBuilder private var staff: some View {
-        if let song, timedMode {
+        if let drill {
+            // The notes sit on their own layer over the empty staff, so a found note can fade out to the left
+            // while the next one fades in from the right.
+            ZStack {
+                StaffView(song: Song(title: "", notes: []), scrollBeat: 0, flashCard: true,
+                          soloClef: drill.clef, onClefTap: tapClef)
+                StaffView(song: Song(title: "", notes: drill.current),
+                          noteStates: drill.engine.noteStates,
+                          wrongPitches: drill.engine.keyStates.filter { $0.value == .wrong }.map(\.key).sorted(),
+                          scrollBeat: 0,
+                          showFingers: false,
+                          flashCard: true,
+                          drawsStaff: false,
+                          soloClef: drill.clef)
+                    .allowsHitTesting(false)
+                    .id(drill.current.first?.id)
+                    .transition(.asymmetric(insertion: .offset(x: 40).combined(with: .opacity),
+                                            removal: .offset(x: -40).combined(with: .opacity)))
+            }
+            .animation(.easeInOut(duration: 0.35), value: drill.current.first?.id)
+            .frame(height: 360)
+        } else if let song, listen.isPlaying {
+            StaffView(song: song,
+                      noteStates: song.listenStates(atBeat: listen.beat),
+                      wrongPitches: [],
+                      scrollBeat: min(listen.beat, song.durationBeats),
+                      showFingers: showFingers)
+                .frame(height: 360)
+        } else if let song, timedMode {
             let e = timed.engine
             StaffView(song: song,
                       noteStates: e.noteStates,
                       wrongPitches: e.keyStates.filter { $0.value == .wrong }.map(\.key).sorted(),
-                      scrollBeat: min(e.beat, song.durationBeats))
+                      scrollBeat: dragBeat ?? min(e.beat, song.durationBeats),
+                      showFingers: showFingers,
+                      onDrag: dragStaff)
                 .frame(height: 360)
         } else if let song {
             StaffView(song: song,
                       noteStates: engine.noteStates,
                       wrongPitches: engine.keyStates.filter { $0.value == .wrong }.map(\.key).sorted(),
-                      scrollBeat: engine.currentStep?.startBeat ?? song.durationBeats)
+                      scrollBeat: dragBeat ?? engine.currentStep?.startBeat ?? song.durationBeats,
+                      showFingers: showFingers,
+                      soloClef: soloClef,
+                      onClefTap: tapClef,
+                      onDrag: dragStaff)
                 .animation(.easeInOut(duration: 0.3), value: engine.currentIndex)
                 .frame(height: 360)
         }
+    }
+
+    private var keyStates: [UInt8: WaitModeEngine.KeyState] {
+        if let drill { return drill.engine.keyStates }
+        if let song, listen.isPlaying {
+            return Dictionary(uniqueKeysWithValues: song.soundingPitches(atBeat: listen.beat).map { ($0, .correct) })
+        }
+        return timedMode ? timed.engine.keyStates : engine.keyStates
     }
 
     private var keyboardRange: ClosedRange<UInt8> {
@@ -199,11 +342,149 @@ struct PracticeView: View {
     }
 
     private func releaseOnScreenKey(_ pitch: UInt8) {
-        if !timedMode, let chord = engine.currentStep?.pitches, chord.count > 1, chord.contains(pitch) {
+        let step = drill != nil ? drill?.engine.currentStep : timedMode ? nil : engine.currentStep
+        if let chord = step?.pitches, chord.count > 1, chord.contains(pitch) {
             latched.insert(pitch)
         } else {
             midi.simulate(.noteOff(pitch: pitch))
         }
+    }
+
+    /// Tapping a clef practises only that hand from the start; tapping either clef again goes back to both hands
+    /// (so one staff always stays on). In the note drill it picks the drill's hand the same way.
+    private func tapClef(_ clef: Clef) {
+        guard let song else { return }
+        if drill != nil { setDrillClef(drillClef == nil ? clef : nil); return }
+        closeResult()
+        releaseLatched()
+        recordAbandoned()
+        soloClef = soloClef == nil ? clef : nil
+        engine = WaitModeEngine(steps: PracticeSteps.make(from: song.notes, clef: soloClef))
+    }
+
+    /// Dragging the staff moves through the song: to the right goes back, to the left goes ahead.
+    /// Wait mode lands on the nearest step; timed mode pauses, and if it was playing goes on after a one-bar count-in.
+    private func dragStaff(by beats: Double, ended: Bool) {
+        guard song != nil else { return }
+        beginMove()
+        let target = min(max((dragFrom ?? 0) - beats, 0), lastStepBeat)
+        if ended { move(to: target, nearest: true) } else { dragBeat = target }
+    }
+
+    /// ◀ slider ▶ under the staff: jump by whole bars. ◀ goes to the start of the bar (or the bar before, if
+    /// already there); the slider shows the music while it moves and jumps when it is let go.
+    private var barControls: some View {
+        let starts = song?.barStartBeats ?? [0]
+        let bar = song?.barIndex(atBeat: dragBeat ?? currentBeat) ?? 0
+        let sliderBar = Binding<Double>(
+            get: { Double(bar) },
+            set: { value in
+                let target = min(max(Int(value.rounded()), 0), starts.count - 1)
+                if let release = sliderRelease, Date().timeIntervalSince(release.time) < 1 {
+                    if release.bar != target {
+                        sliderRelease?.bar = target
+                        move(to: starts[target], nearest: false)
+                    }
+                    return
+                }
+                beginMove()
+                dragBeat = starts[target]
+            })
+        return HStack(spacing: 16) {
+            Button {
+                guard let back = starts.last(where: { $0 < currentBeat - 1e-6 }) else { return }
+                beginMove(); move(to: back, nearest: false)
+            } label: { Label("Bar Back", systemImage: "backward.end.fill") }
+            Slider(value: sliderBar, in: 0...Double(max(starts.count - 1, 1)), step: 1) { editing in
+                guard !editing else { return }
+                // A quick flick can end before its first value arrives, so this also counts with no move under way.
+                sliderRelease = (song?.barIndex(atBeat: dragBeat ?? currentBeat) ?? 0, Date())
+                if let dragBeat { move(to: dragBeat, nearest: false) }
+            }
+            .disabled(starts.count < 2)
+            Button {
+                guard let ahead = starts.first(where: { $0 > currentBeat + 1e-6 }) else { return }
+                beginMove(); move(to: ahead, nearest: false)
+            } label: { Label("Bar Ahead", systemImage: "forward.end.fill") }
+            Text("Bar \(bar + 1) of \(starts.count)")
+                .monospacedDigit()
+                .frame(minWidth: 110, alignment: .leading)
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.bordered)
+    }
+
+    /// The beat at the cursor now (the current step in wait mode, the playhead in timed mode).
+    private var currentBeat: Double {
+        timedMode ? max(0, timed.engine.beat) : engine.currentStep?.startBeat ?? lastStepBeat
+    }
+
+    private var lastStepBeat: Double {
+        (timedMode ? timed.engine.steps.last : engine.steps.last)?.startBeat ?? 0
+    }
+
+    /// Starts moving through the song (a drag, the slider or a bar button): closes the result card and pauses timed mode,
+    /// remembering whether it was playing.
+    private func beginMove() {
+        guard dragFrom == nil else { return }
+        closeResult()
+        dragFrom = currentBeat
+        resumeAfterDrag = timedMode && timed.isPlaying
+        timed.pause()
+    }
+
+    /// Puts the song at `beat`. Wait mode lands on the nearest step (a drag) or the first step from there (a bar);
+    /// timed mode goes on from there after a count-in if it was playing.
+    private func move(to beat: Double, nearest: Bool) {
+        let target = min(max(beat, 0), lastStepBeat)
+        dragFrom = nil
+        dragBeat = nil
+        if timedMode {
+            timed.seek(to: target, resume: resumeAfterDrag)
+        } else {
+            releaseLatched()
+            engine.jump(to: nearest ? engine.stepIndex(nearest: target) : engine.stepIndex(from: target))
+        }
+    }
+
+    /// Starts the note drill afresh for the open song (counts back to zero), pausing whatever else was going on.
+    private func startDrill() {
+        guard let song else { return }
+        pauseAll()
+        closeResult()
+        releaseLatched()
+        showOverview = false
+        drill = makeDrill(song)
+    }
+
+    /// A drill that goes on from the misses saved so far (they are per note, across songs and launches).
+    private func makeDrill(_ song: Song) -> NoteDrill {
+        let saved = UserDefaults.standard.data(forKey: Self.drillStatsKey)
+        let stats = saved.flatMap { try? JSONDecoder().decode(NoteDrillStats.self, from: $0) }
+        return NoteDrill(song: song, clef: drillClef, stats: stats ?? NoteDrillStats())
+    }
+
+    private func saveDrillStats() {
+        guard let stats = drill?.stats, let data = try? JSONEncoder().encode(stats) else { return }
+        UserDefaults.standard.set(data, forKey: Self.drillStatsKey)
+    }
+
+    private func setDrillClef(_ clef: Clef?) {
+        drillClef = clef
+        startDrill()
+    }
+
+    private func pauseAll() {
+        timed.pause()
+        listen.stop()
+    }
+
+    private func toggleListen() {
+        if listen.isPlaying { listen.stop(); return }
+        guard let song else { return }
+        timed.pause()
+        closeResult()
+        listen.play(song, speed: speed)
     }
 
     private func releaseLatched() {
@@ -231,6 +512,17 @@ struct PracticeView: View {
     /// (it is a copy of this view), so it is made again whenever the mode changes.
     private func installMIDIHandler() {
         midi.onEvent = { event in
+            // While the song plays itself, keys are not judged.
+            if listen.isPlaying, case .noteOn = event { return }
+            // The overview is for reading: playing must not move the song out of sight. Releases still go through,
+            // so a key held when it opened doesn't stay colored.
+            if showOverview, case .noteOn = event { return }
+            if drill != nil {
+                handleDrill(event)
+                return
+            }
+            // Playing means the move is over, even if the drag or slider never reported its end.
+            if case .noteOn = event, let dragBeat { move(to: dragBeat, nearest: false) }
             switch event {
             case .noteOn(let pitch, _) where timedMode:
                 if case .wrong = timed.noteOn(pitch) {
@@ -257,9 +549,31 @@ struct PracticeView: View {
         }
     }
 
+    /// Note drill: same feedback as wait mode, and it never finishes. Releases also go to the wait and timed engines,
+    /// so a key held down while switching modes doesn't stay colored there.
+    private func handleDrill(_ event: MIDIInputService.Event) {
+        switch event {
+        case .noteOn(let pitch, _):
+            switch drill?.noteOn(pitch) {
+            case .wrong: flash = .red
+            case .stepCompleted:
+                flash = .green
+                saveDrillStats()
+                DispatchQueue.main.async(execute: releaseLatched)
+            default: break
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { flash = .clear }
+        case .noteOff(let pitch):
+            drill?.noteOff(pitch)
+            engine.noteOff(pitch)
+            timed.noteOff(pitch)
+        }
+    }
+
     /// The song was played to the end: record it and show the result card.
     private func finish(_ finished: PracticeResult) {
-        if let songEntry {
+        let skipped = finished.timed ? timed.engine.skippedAhead : engine.skippedAhead
+        if let songEntry, finished.timed || soloClef == nil, !skipped {
             library.updateProgress(of: songEntry) { $0.recordCompleted(mistakes: finished.mistakes, notes: finished.total) }
         }
         result = finished
@@ -276,7 +590,7 @@ struct PracticeView: View {
         let e = timed.engine
         if isTimed, timed.hasStarted, !e.isFinished {
             library.updateProgress(of: songEntry) { $0.recordAbandoned(mistakes: e.wrongCount + e.missedCount, notes: e.noteCount) }
-        } else if !isTimed, !engine.isFinished {
+        } else if !isTimed, soloClef == nil, !engine.isFinished {
             library.updateProgress(of: songEntry) { $0.recordAbandoned(mistakes: engine.wrongCount, notes: engine.noteCount) }
         }
     }
@@ -284,14 +598,17 @@ struct PracticeView: View {
     private func open(_ entry: SongLibrary.Entry) {
         do {
             let loaded = try library.load(entry)
+            listen.stop()
             closeResult()
             releaseLatched()
             recordAbandoned()
             song = loaded
             songEntry = entry
             note = library.note(for: entry)
+            soloClef = nil
             engine = WaitModeEngine(steps: PracticeSteps.make(from: loaded.notes))
             timed.load(loaded, speed: speed)
+            if drill != nil { drill = makeDrill(loaded) }
             loadError = nil
             lastSong = entry.url.lastPathComponent
         } catch {

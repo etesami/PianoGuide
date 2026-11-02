@@ -50,6 +50,24 @@ xcrun simctl launch $SIM com.esnetsm.pianoguide
 xcrun simctl io $SIM screenshot shot.png
 ```
 
+Taps and drags can be scripted, which is how the bar slider bug was reproduced (session 25). A small throwaway Swift script
+posts `CGEvent` mouse events (`.leftMouseDown`, `.leftMouseDragged`, `.leftMouseUp`) to screen coordinates over the Simulator
+window, and the simulator treats them as touches. The script isn't in the repo. Bring the window to the front first, and check
+where things are with `screencapture -R`: the app can appear rotated in the window, so screen x and y may not match the app's.
+To see what the app received, add a temporary `NSLog` and read it back:
+
+```sh
+xcrun simctl spawn $SIM log show --last 2m --style compact --predicate 'eventMessage CONTAINS "DBG"'
+```
+
+## Retake the README screenshots
+
+The images in `docs/screenshots/` were taken with a throwaway XCUITest (not in the repo), which can tap and rotate without moving the Mac's mouse:
+a temporary copy of the repo with a `bundle.ui-testing` target in `project.yml`, run on a temporary simulator with Ode to Joy copied in (as above).
+`simctl status_bar … override` sets the clock. Each test screenshot comes out sideways with EXIF orientation data, so rotate the pixels and drop the metadata
+(1400 px wide, with Pillow; `sips -r` keeps the EXIF data and the image then looks wrong in some viewers).
+Don't press Play in Timed mode with nobody playing: the misses make the song show as Difficult in the library.
+
 ## Test with the piano on the Mac (Mac Catalyst)
 
 The simulator can't see MIDI devices plugged into the Mac, so to play the real FP-30X on the dev Mac,
@@ -85,6 +103,11 @@ Bluetooth also works on the Mac: pair the piano in Audio MIDI Setup → MIDI Stu
    **Settings → General → VPN & Device Management** → trust your developer certificate.
 5. With a free Apple ID the app stops launching after **7 days**. Press Run again in Xcode to re-sign it.
 
+**Without opening Xcode:** `scripts/install-ipad.sh` lists the paired iPads, asks which one (skipped if there is only
+one), then builds, installs and launches the app (`xcodebuild` + `xcrun devicectl`). It builds into Xcode's own
+DerivedData, so it shares the build cache with Xcode (about 30 s when little changed). The iPad must have been paired
+once (steps 1 and 4 above); after that it also works over Wi-Fi.
+
 ## Connect the Roland FP-30X
 
 1. Turn on the piano's Bluetooth. Press the button to switch to MIDI mode if needed; see the FP-30X manual for "Bluetooth MIDI".
@@ -102,6 +125,8 @@ Bluetooth also works on the Mac: pair the piano in Audio MIDI Setup → MIDI Stu
 | `…/FingerSongs.swift` | `FingerPractice`: five-finger coordination drills (pairs, skips, mirror, parallel) |
 | `…/TestSongs.swift` | Songs for trying the import ("Ode to Joy", "Minuet in G"); written to `TestSongs/` |
 | `…/WaitModeEngine.swift` | `PracticeSteps` (chord grouping) and the wait-mode state machine |
+| `…/NoteDrill.swift` | Notes mode: endless random notes from a song, judged by a `WaitModeEngine`; `NoteDrillStats` asks missed notes more often |
+| `…/SongForm.swift` | Finds repeated sections from the notes (A A′ B A), for both hands or one, with a note per section |
 | `…/StaffLayout.swift` | Staff positions (clef, line/space, sharps, ledger lines), `NoteValue`, bar lines |
 | `…/PracticeResult.swift` | Result of a finished run (perfect / almost / needs practice), shown by `PracticeResultView` |
 | `…/SongProgress.swift` | Per-song progress: times completed, recent wrong notes, "difficult" rule (mistakes > 10% of the notes); the user's own `SongMark` (hard / interesting) |
@@ -115,6 +140,7 @@ Bluetooth also works on the Mac: pair the piano in Audio MIDI Setup → MIDI Stu
 | `App/Sources/PracticeView.swift` | Main screen: wait mode on the chosen song (staff + keyboard); remembers the last song |
 | `App/Sources/SongLibrary.swift` | Bundled samples (subfolders = categories) + imported `.mid` files (copied to Documents/Songs); import, delete, load; each song's `SongProgress` (UserDefaults `songProgress`) |
 | `App/Sources/SongLibraryView.swift` | "Songs" sheet: category folders, pick a song, swipe to delete, Import button (`fileImporter`); completed (green check) and difficult (orange) marks; user marks (swipe right / long-press, "Marked" section); `SongMarkPicker` (also used by the flag button in `PracticeView`) |
+| `App/Sources/SongOverviewView.swift` | The whole song in small staves, grouped into its sections; the toolbar button in `PracticeView` turns it on (`StaffView.Line` draws each line) |
 | `App/Sources/StaffView.swift` | Grand staff drawn in a `Canvas`, scrolling past the cursor (`scrollBeat` is animatable) |
 | `App/Sources/KeyboardView.swift` | On-screen piano that can be tapped; note-name labels and key colors |
 

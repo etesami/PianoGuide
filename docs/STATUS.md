@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-10-09 (session 17: notes went to the wrong mode after switching Wait/Timed; switch missing on the Mac)
+Last updated: 2026-11-01 (session 28: README with screenshots)
 
 ## Where we are
 
@@ -22,6 +22,9 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   "wrong notes: 1"; then C4 moved to step 3. Window screenshots work (Screen Recording permission granted).
 - **Key labels** (session 5): every on-screen key shows its note name (C4, F#4, …); the "Aa" toolbar button
   shows/hides them, and the choice is remembered (`@AppStorage("showKeyLabels")`). Seen in the simulator screenshot.
+- **Finger-number toggle** (session 18): a "123" toolbar button (`textformat.123`) next to "Aa" hides/shows the finger numbers above/below
+  the notes on the practice staff (`StaffView.showFingers`), remembered with `@AppStorage("showFingers")`.
+  Lesson-note examples always show them. Verified in the Mac Catalyst app by setting the saved value both ways: numbers show/hide. The icon looks the same in both states: on the Mac the toolbar ignored opacity, toggle highlighting and `.tint`. **Not verified:** clicking the button itself.
 - **Key colors** (session 5, confirmed by the user on the real piano): a key is green if it was correct when pressed,
   red if wrong, and keeps that color until released (even after the step moves on). After a wrong note, the keys
   still needed for the step turn orange until the step is done. No blue hint on the keyboard. Logic: `WaitModeEngine.keyStates`.
@@ -43,6 +46,7 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   `TestSongs/Minuet in G.mid` (single track split at middle C, 3/4, eighths, F#, tempo change); see `TestSongs/README.md`.
   Generated from `PianoCore/TestSongs.swift`; the writer now also writes time signatures and single-track files.
   Both load in the simulator with the right time signature, hands and step count.
+  `TestSongs/README.md` gives each song a level and a description for the player.
 - **Finger numbers** (session 7): notes with a finger show it on the staff, above treble notes and below bass notes
   (clear of stems; stacked for chords), in the note's color. In `.mid` files a finger is stored as a lyric event "1"–"5"
   just before the note-on (our own convention; MIDI has no standard; the writer and parser both handle it).
@@ -172,9 +176,165 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   Grading: `PianoCore/PracticeResult.swift` (tested); card: `App/Sources/PracticeResultView.swift`. 29 tests pass;
   both colors seen in simulator screenshots with a temporary hook (removed). **Not verified:** finishing a song by hand.
 
+- **Listen (auto-play)** (session 19, user's request: "a perfect song play given the tempo"): in timed mode a
+  **Listen** button (speaker icon, becomes **Stop**) next to Play makes the app play the whole song by itself at the
+  speed stepper's value (changing the speed while listening takes effect at once). The notes are scheduled on the
+  audio clock by `AVAudioSequencer` from the song written back to MIDI (`MIDIFileWriter`), so timing is exact and
+  follows tempo changes; a 60 Hz timer only reads the position to scroll the staff. Sounding notes are blue at the
+  cursor, finished ones green, and the sounding keys light up green. No count-in or metronome. Keys pressed while
+  listening are ignored (not judged). It stops on Stop, Play, Restart, mode switch, opening songs/note/Bluetooth, or
+  another song, and by itself at the end (no result card, nothing recorded). Sound: `AVAudioUnitSampler` with the
+  macOS General MIDI piano (`gs_instruments.dls`) on Mac Catalyst; **iPadOS has no built-in sound bank, so on the iPad
+  it is the sampler's plain default tone**. App: `App/Sources/AutoPlayer.swift`; note colors/keys from
+  `Song.listenStates(atBeat:)` / `soundingPitches(atBeat:)` (tested). 30 tests pass; iOS simulator and Catalyst build;
+  seen in a Catalyst screenshot with a temporary hook that started Listen (removed). **Not verified:** hearing it,
+  pressing the button by hand.
+
+- **Delete imported songs** (session 20, user's request): besides swipe-left in "My Songs" (hard to find, awkward with a
+  mouse), a song in My Songs (or an imported one in "Marked") now has **Delete Song…** in its long-press / right-click menu,
+  with a confirmation ("The original file is not touched"). It removes the copy in Documents/Songs and its progress/mark.
+  If the deleted song is the one open, the practice screen switches to the first sample and records nothing for it
+  (`PracticeView` watches `library.imported`). Samples can't be deleted. Catalyst build succeeds.
+  **Not verified:** the menu and dialog by hand.
+
+- **Piano guide + Reading Guide drills** (session 21, user's request: a beginner guide to note reading and moving the
+  hands, as a PDF to review, plus practice MIDI): `docs/guide/Piano Fundamentals.pdf` (33 pages, iPad Air size): keyboard
+  map, finger numbers, grand staff, landmark notes, steps/skips, hand positions (C, Middle C, G, F), moving the hand
+  (shift, thumb under, cross-over, extension), "Find, Fit, Flow" for reading without finger numbers, rhythm, the drills as
+  sheet music, a practice plan. Everything is generated: edit `docs/guide/piano-fundamentals.md` or `docs/guide/tools/*.py`
+  and run `docs/guide/build.sh` (see `docs/guide/README.md`). Figures are our own SVG (no music engraver installs on this
+  Intel Mac; clefs come from the Apple Symbols font). The 8 drills (finger number only where a position starts) are
+  bundled as a new category **Reading Guide** (`.mid` + lesson `.md`), written by the guide's Python, not by
+  `write-samples`/`SampleSongs.all`, so the core tests don't cover them. Checked with the app's own `MIDIFileParser` and
+  `PracticeNote` (compiled with swiftc): titles, 4/4, tempo, hands, fingers, every lesson note has a readable staff example.
+  **Not verified:** opening them in the app, playing them by hand.
+
+- **One-hand practice** (session 22, user's request): in **wait mode**, tapping a **clef** on the staff practises only that
+  hand: treble = right hand, bass = left hand. The other staff's clef, time signature, notes and finger numbers turn light
+  grey, and the song waits only for the chosen staff's notes (steps rebuilt with `PracticeSteps.make(from:clef:)`, which
+  goes by staff, so a single-track song split at middle C works; tested). Tapping **either** clef again goes back to both
+  hands, so both staves can never be off at once. Each change restarts the song from the start. The header adds
+  "· right hand only" / "· left hand only". Restart keeps the choice; opening another song goes back to both hands.
+  **One-hand runs are not recorded** in the song's progress (no Completed / Difficult). Keys pressed that aren't in the
+  chosen hand's step count as wrong, the same as before. Timed mode and Listen still use both hands.
+  The tap only looks at the clef area (left of the music), split at the gap between the staves (`StaffView.onClefTap`).
+  31 tests pass; Catalyst build; seen in a Catalyst screenshot ("1. C position (both hands)", right hand only: 34 steps,
+  bass greyed out) with a temporary hook (removed). **Not verified:** tapping the clef by hand, playing one hand through.
+
+- **Drag the staff to move through the song** (session 22, user's request: "replay the last 5 sec"): in wait and timed
+  mode, dragging the staff sideways scrolls the music with the finger/mouse: **to the right goes back**, to the left
+  goes ahead (between the first and the last note). **Wait mode** lands on the step nearest the cursor
+  (`WaitModeEngine.jump(to:)` / `stepIndex(nearest:)`). **Timed mode** pauses while dragging and moves the playhead
+  (`TimedModeEngine.seek(to:)`): going back forgets the hits/misses from there on; going ahead leaves the skipped notes
+  unjudged (not missed). If it was playing, it goes on after **one bar of clicks** while the music waits
+  (`TimedSession.seek`; clicks stay on the song's beat grid); if it was paused, the next Play has that count-in.
+  Wrong-note counts are kept. **A run where you jumped ahead of the furthest point you had played to isn't recorded as
+  completed** (`skippedAhead`); going back is fine. Listen mode can't be dragged.
+  33 tests pass; seen in the Catalyst app with real mouse drags (posted with CGEvent): wait mode ahead to step 8 and back
+  to step 4; timed mode ahead with "missed 0". **Not verified:** the count-in after a drag (pressing Play), dragging on
+  the iPad (touch), and how a drag feels together with a clef tap.
+- **Jump by bars** (session 22, user's request: dragging is slow for going back a few sections): a row under the staff
+  (wait and timed mode, hidden while Listen plays) with **◀** (start of this bar, or the bar before if already there),
+  a **slider** over the whole song (one stop per bar; the staff follows while sliding, the song jumps when it is let go)
+  and **▶** (next bar), plus "Bar N of M". Wait mode lands on the first step from the bar start
+  (`WaitModeEngine.stepIndex(from:)`); timed mode seeks like a drag (count-in if it was playing). Bars come from
+  `Song.barStartBeats` / `barIndex(atBeat:)` (first time signature's bar grid; tested). Same rules as dragging:
+  wrong notes kept, jumping ahead isn't recorded as completed. 33 tests pass; seen in the Catalyst app with real mouse
+  events: slider to bar 9 (step 25), then ◀ to bar 8 (step 24). **Not verified:** timed mode with the bar row, touch on iPad.
+
+- **Install on the iPad from the command line** (session 22, user's request): `scripts/install-ipad.sh` lists the paired
+  iPads, asks which one, builds (Xcode's own DerivedData, shared with Xcode), installs and launches (`xcrun devicectl`).
+  Ran it on "Ehsan's iPad" (iPad13,16, iPadOS 26.3.1): built, installed and launched in 32 s. See DEVELOPMENT.md.
+
+- **Notes mode: note-finding drill** (session 23, user's request: "I cannot quickly identify notes on the keyboard"):
+  a third segment **Notes** in the mode switch (Wait / Timed / Notes). It shows **one note at a time** in the middle of the
+  staff (a quarter note with its stem; no cursor, time signature or bar lines: `StaffView.flashCard`, session 23 follow-up), picked at random from the
+  **distinct pitches the open song uses** on that staff, endlessly, until another mode is picked. A hand picker in the header
+  (**Both Hands / Right Hand / Left Hand**; tapping a clef works too, as in wait mode): with both hands each prompt is
+  **one treble note and one bass note pressed together** (user's choice); if the song has no notes on one staff, both
+  hands gives single notes from the other. A prompt never repeats the one before. Judging is wait mode's
+  (`NoteDrill` wraps a `WaitModeEngine` and appends a new step after each one is done; `WaitModeEngine.append`), so
+  wrong keys are red, the needed keys turn orange, the screen flashes; header shows "Found N · wrong notes: M".
+  A found note **turns green and stays until its key(s) are let go** (both keys with both hands; keys pressed meanwhile
+  aren't judged: `NoteDrill.isFound`); then it fades out to the left while the next fades in from the right (0.35 s; the
+  notes are a separate `StaffView(drawsStaff: false)` layer over the empty staff, keyed by prompt). Seen in Catalyst
+  screenshots with a held mouse: C4 green while held, then F#4 sliding in.
+  Key labels follow the Aa button (user's choice). Leaving Notes goes back to wait/timed **where they were** (not reset);
+  timed mode and Listen are paused on entering. Restart or changing the hand starts the drill afresh; opening another
+  song rebuilds it from that song. Nothing is recorded in song progress. 3 new tests (36 pass); seen in the Catalyst app
+  with real mouse events: Notes → F#4 shown; C4 → "wrong notes: 1", F#4 key orange; F#4 → "Found 1", next note G4.
+  **Not verified:** both hands with a two-hand song in the app (unit-tested only), the real piano, the iPad.
+
+- **Notes mode asks missed notes more often** (session 24, user's request): `NoteDrillStats` (in `NoteDrill.swift`) records
+  each note's misses, **per staff and pitch, across songs**, saved in UserDefaults (`noteDrillStats`) each time a prompt is
+  found. A prompt counts once per note however many wrong keys it took; with two notes, the wrong key is blamed on the
+  nearer note not yet pressed. A prompt left unfinished isn't recorded.
+  Distribution (`NoteDrillStats.shares`): miss rate = misses / (attempts + 3), both fading by 0.9 per prompt of that note,
+  so only about its last 10 prompts count and getting it right brings it back down. Weight = 1 + 5 x miss rate; the boosts
+  together may not exceed the base weights, so every note keeps at least half its even share. A note is also never asked
+  twice in a row on its staff, now in both-hands mode too. Simulated shares of 100,000 prompts, 12 notes (even = 8.3%):
+  one note missed 50% of the time 18.2% (others 7.4% each), missed always 24.6% (6.9%); three notes at 50% 15.2% (6.0%);
+  six notes at 50% 12% (4.6%). 7 new tests (43 pass). Catalyst build checked; **not tried in the running app or on the piano.**
+  No screen shows the stats and there is no reset yet.
+
+- **Fix: staff froze after sliding the bar slider with one hand** (session 25, user's report): with one clef on, swiping the
+  slider back to the start left the notes still while the step count went on. The song lands on that hand's first note
+  (bar 9 in "Fingers 2 · Skips") while the thumb is on bar 1; the slider's values after the release (see Known issues) then
+  opened a new move that nothing ended, and `dragBeat` pinned the staff. Now those values only correct the landing spot, and
+  a note played during an unfinished move ends it, which also covers a cancelled staff drag. App-only change, so no new unit test.
+  Reproduced and checked in the iPad simulator with mouse events on the slider and the on-screen keys: slow and fast swipes,
+  left hand and both hands, 43 tests pass. **Not verified:** touch on the real iPad.
+
+- **Song overview** (session 26, user's request: see the whole piece small, and understand how a section forms and then repeats):
+  a toolbar button (`rectangle.grid.1x2`, not in Notes mode) swaps the practice screen for `SongOverviewView`: all the bars in
+  small staves, four to a line, scrolling vertically, grouped into sections with a letter and a tint. It shows the form
+  (A A′ B A), "24 bars, 16 to learn", a note per section ("Comes back at bar 17", "Same as bar 1", "Like bar 1, but bar 8 is
+  different"), an orange band on the bars a near-repeat changes, and collapsible tips on spotting repeats. Off at launch. Opening
+  it pauses timed mode and Listen, and note-ons are ignored while it shows, so playing can't move the song out of sight.
+  `SongForm` (PianoCore) finds the sections from the notes, since MIDI has no repeat signs: bars match on pitches and places in
+  the bar; the longest free stretch of 2+ bars that comes back wins, then the search repeats on what's left; a stretch counts
+  as a near-repeat if at most a quarter of its bars differ. Bars no repeat claimed form one "Plays once" section between the others.
+  On the 27 song files: 7 have repeats (positions 1 = A A, 2 = A B A, 3 = A B A, Ode to Joy = A A′), the other 20 say "No repeated
+  sections found". 12 new tests (55 pass). Seen in the iPad simulator, portrait, with mouse events: Ode to Joy, C + F positions
+  (scrolling, tips, step and wrong count kept across on/off), Minuet in G. **Not verified:** that the real piano is ignored while it
+  shows (the simulator has no MIDI input), landscape, and a long real piece.
+
+- **Song overview by hand** (session 27, user's request: focus on the repeating left-hand notes): a Both / Left / Right picker in the
+  overview. `SongForm(song:clef:)` then counts only that hand's notes (bar numbers stay those of the song), and the other staff is greyed
+  out. New for all views: one bar played twice or more in a row is a "one-bar pattern" section ("One bar played 4 times"), and rests
+  between repeats are their own "–" section and don't count as bars to learn. The picker goes back to both when the overview closes.
+  On the song files: left hand 11 of the 21 with left-hand notes have repeats, 7 of them not seen with both hands (Hands 2–6,
+  Positions C G F, Reading on your own); right hand 13 of 25; both hands unchanged at 7 of 27. 7 more tests (62 pass). Seen in the
+  iPad simulator on Hands 4 (both: none; left: A B A C). **Not verified:** landscape, a long real piece.
+
 **Not yet verified:** running on the real iPad; in-app Bluetooth pairing; the Songs sheet and import picker by hand.
 
+- **README with screenshots** (session 28): `README.md` rewritten, images in `docs/screenshots/` (iPad Pro 11-inch simulator, Ode to Joy).
+  How they were taken is in [DEVELOPMENT.md](DEVELOPMENT.md#retake-the-readme-screenshots); retake them when the screens change.
+
 ## Next steps (in order)
+
+0. User to try the **song overview** (toolbar button) on real pieces, and its hand picker. Open questions: the same left-hand pattern on
+   other chords isn't seen (C-E-G then F-A-C), which may matter most for the left hand: compare shapes rather than notes? The same goes
+   for repeats in another key (C + F positions is the same shape in two keys). A single bar that comes back alone isn't marked (Hands 4,
+   left hand: bar 13 equals bar 1). A long "Plays once" stretch isn't split (positions 3 has 16 bars as one B; F and D could be told apart only
+   by key). Tap a bar to jump practice there? Should it keep the scroll place when reopened?
+0. User to try the **bar slider fix** on the real iPad with touch: with one clef on, play a few notes, swipe the bar back, play again; the notes should move.
+0. User to try **missed notes coming up more often** in Notes mode: does the mix feel right? Should the app show which notes
+   are weak, or offer a reset? Should slow answers count as weak too?
+0. User to try **Notes mode** (the note drill). Open questions: a score/streak or timer ("how fast did I find it")? Show the note's name after a wrong key?
+0. User to try **one-hand practice** (tap a clef in wait mode). Open questions: should a one-hand run count towards the
+   song's progress (maybe its own mark)? Should timed mode get it too? Should the choice stay when opening another song?
+0. User to try the **bar row** (◀ slider ▶): is one stop per bar right, or should it jump by phrases (4 bars)?
+0. User to try **dragging the staff** (wait and timed). Is the drag speed right (the music follows the pointer 1:1)?
+   Should timed mode keep playing straight after the drag, without the one-bar count-in?
+
+0. User to read the guide PDF and try the **Reading Guide** drills (wait mode, then fingers hidden). Change or add
+   chapters/drills on request, then rebuild with `docs/guide/build.sh`.
+
+0. User to try **Listen** (timed mode). Is the Mac piano sound OK? For a real piano sound on the iPad, options: bundle a
+   small piano SoundFont (`.sf2`) for the sampler, or send the notes out to the FP-30X over MIDI. Pause/resume,
+   a count-in, or Listen in wait mode only if wanted.
 
 0. User to try the result card by finishing a song. Is 10% of the notes the right line between green and
    orange? Should it play a sound?
@@ -239,9 +399,18 @@ and team are already set up): connect the iPad, turn on Developer Mode, install 
 | 2026-10-09 | Result card at the end of a song: green if mistakes ≤ 10% of the notes, orange if more; the Difficult mark uses the same rule (was a fixed 5). |
 | 2026-10-09 | Lesson notes are Markdown files next to each song (`x.md` for `x.mid`, same level folder), shown after picking the song; closable and scrollable. |
 | 2026-10-06 | Song library: imported `.mid` files are **copied** into the app (Documents/Songs), so they stay if the original moves; the file name is the song title; the last song opens on launch. No database: the folder is the library. |
+| 2026-11-01 | Notes mode weighting: misses are kept per staff and pitch across songs (not per song); weight = 1 + 5 x recent miss rate, and the boosts together may not exceed the base weights, so every note keeps at least half its even share. Values chosen by Claude from simulation; the user has not tried them yet. |
 
 ## Known issues / caveats
 
+- `SongForm` needs exact timing: bars must match to 1/48 of a beat, so a `.mid` recorded by hand (not quantized) will show no repeats.
+- **The iOS 26 `Slider` keeps sending values after it is let go** (session 25, seen in the iPad simulator's log): `onEditingChanged(false)`
+  is followed by a stray `onEditingChanged(true)` and about 0.5 s of values while the thumb settles, with **no** closing `false`.
+  `PracticeView.sliderRelease` treats values in the second after a release as corrections to the landing spot, not as a new move.
+- Jumping ahead to the last step and playing it shows the "Perfect! You played the whole song" card, though most of the song
+  was skipped (seen in session 25). Progress isn't recorded for such a run (`skippedAhead`), but the card doesn't know that. Not fixed.
+- A very fast flick of the bar slider (32 ms in the simulator) can stop short of where it was aimed (bar 4 instead of bar 1).
+  The staff, step and thumb still agree, and sliding again works. Not looked into further.
 - The dev Mac is an **Intel Mac**. Xcode 26.3 is installed and selected (`xcode-select -p` → Xcode.app). The simulator is slow
   to launch the first time (about 15 s before the UI appears).
 - The iPad simulator runs its **own MIDIServer**: it does not see USB/Bluetooth MIDI devices connected to the Mac, and

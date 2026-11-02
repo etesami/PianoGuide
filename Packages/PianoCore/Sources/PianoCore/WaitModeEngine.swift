@@ -24,6 +24,12 @@ public enum PracticeSteps {
         }
         return steps
     }
+
+    /// Only the notes written on `clef` (one-hand practice); nil means both staves.
+    /// Uses the staff, not `hand`, so a single-track song split at middle C works too.
+    public static func make(from notes: [NoteEvent], clef: Clef?) -> [PracticeStep] {
+        make(from: notes.filter { clef == nil || StaffLayout.clef(for: $0) == clef })
+    }
 }
 
 /// Wait mode: the song does not move on until every pitch of the current step has been pressed.
@@ -43,7 +49,7 @@ public struct WaitModeEngine: Sendable {
         case missed     // part of the current step, not pressed yet, after a wrong note in this step
     }
 
-    public let steps: [PracticeStep]
+    public private(set) var steps: [PracticeStep]
     public private(set) var currentIndex = 0
     public private(set) var hitInCurrentStep: Set<UInt8> = []
     public private(set) var wrongCount = 0
@@ -51,6 +57,10 @@ public struct WaitModeEngine: Sendable {
     private var heldCorrect: Set<UInt8> = []
     private var heldWrong: Set<UInt8> = []
     private var wrongInCurrentStep = false
+    /// The furthest step reached by playing (not by jumping).
+    private var furthestIndex = 0
+    /// Set when the player jumped past the furthest step they had played to, so the run can't count as a full play.
+    public private(set) var skippedAhead = false
 
     public init(steps: [PracticeStep]) {
         self.steps = steps
@@ -76,6 +86,7 @@ public struct WaitModeEngine: Sendable {
         if hitInCurrentStep == step.pitches {
             let completed = currentIndex
             currentIndex += 1
+            if !skippedAhead { furthestIndex = max(furthestIndex, currentIndex) }
             hitInCurrentStep = []
             wrongInCurrentStep = false
             return .stepCompleted(index: completed)
@@ -127,5 +138,30 @@ public struct WaitModeEngine: Sendable {
         hitInCurrentStep = []
         wrongCount = 0
         wrongInCurrentStep = false
+        furthestIndex = currentIndex
+        skippedAhead = false
+    }
+
+    /// Moves to another step (dragging the staff), keeping the wrong-note count.
+    public mutating func jump(to index: Int) {
+        currentIndex = max(0, min(index, steps.count - 1))
+        hitInCurrentStep = []
+        wrongInCurrentStep = false
+        if currentIndex > furthestIndex { skippedAhead = true }
+    }
+
+    /// Adds a step at the end (the note drill makes its notes as it goes).
+    public mutating func append(_ step: PracticeStep) {
+        steps.append(step)
+    }
+
+    /// The first step starting at or after `beat` (the last step if there is none).
+    public func stepIndex(from beat: Double) -> Int {
+        steps.firstIndex { $0.startBeat >= beat - 1e-6 } ?? max(0, steps.count - 1)
+    }
+
+    /// The step whose start is closest to `beat`.
+    public func stepIndex(nearest beat: Double) -> Int {
+        steps.indices.min { abs(steps[$0].startBeat - beat) < abs(steps[$1].startBeat - beat) } ?? 0
     }
 }

@@ -213,6 +213,7 @@ final class MIDIFileTests: XCTestCase {
             XCTAssertEqual(parsed.notes.map(\.startBeat), song.notes.map(\.startBeat), name)
             // Two tracks give the hands directly; the single-track file is split at middle C, which matches here too.
             XCTAssertEqual(parsed.notes.map(\.hand), song.notes.map(\.hand), name)
+            XCTAssertEqual(parsed.notes.map(\.finger), song.notes.map(\.finger), name)
         }
         XCTAssertEqual(TestSongs.minuetInG.timeSignatures.first?.numerator, 3)
         XCTAssertEqual(PracticeSteps.make(from: TestSongs.odeToJoy.notes).first?.pitches.count, 4, "C3+E3+G3 with E4")
@@ -256,6 +257,41 @@ final class WaitModeTests: XCTestCase {
         XCTAssertEqual(all.count, 2)
         XCTAssertEqual(all[0].pitches, [60, 64, 48], "first step is a 3-note chord")
         XCTAssertEqual(PracticeSteps.make(from: notes, hands: [.right])[0].pitches, [60, 64], "hand filter")
+    }
+
+    func testJumpKeepsWrongNotesAndNoticesSkipping() {
+        let notes = (0..<4).map { NoteEvent(id: $0, pitch: UInt8(60 + $0), startBeat: Double($0), durationBeats: 1, velocity: 80) }
+        var engine = WaitModeEngine(steps: PracticeSteps.make(from: notes))
+        _ = engine.noteOn(60)
+        _ = engine.noteOn(70)
+        _ = engine.noteOn(61)
+        XCTAssertEqual(engine.stepIndex(nearest: 0.4), 0)
+        XCTAssertEqual(engine.stepIndex(nearest: 2.6), 3)
+        XCTAssertEqual(engine.stepIndex(from: 1.2), 2, "first step from a bar start, not the closest one")
+        XCTAssertEqual(engine.stepIndex(from: 9), 3, "past the end: the last step")
+        engine.jump(to: engine.stepIndex(nearest: 0.2))
+        XCTAssertEqual(engine.currentIndex, 0)
+        XCTAssertEqual(engine.wrongCount, 1)
+        XCTAssertFalse(engine.skippedAhead)
+        engine.jump(to: 2)
+        XCTAssertFalse(engine.skippedAhead, "step 2 was reached by playing")
+        engine.jump(to: 3)
+        XCTAssertTrue(engine.skippedAhead)
+        engine.reset()
+        XCTAssertFalse(engine.skippedAhead)
+    }
+
+    func testOneClefOnly() {
+        let notes = [
+            NoteEvent(id: 0, pitch: 60, startBeat: 0, durationBeats: 1, velocity: 80, hand: .right),
+            NoteEvent(id: 1, pitch: 48, startBeat: 0, durationBeats: 1, velocity: 80, hand: .left),
+            NoteEvent(id: 2, pitch: 50, startBeat: 1, durationBeats: 1, velocity: 80, hand: .left),
+            NoteEvent(id: 3, pitch: 67, startBeat: 2, durationBeats: 1, velocity: 80),   // unknown hand: treble
+            NoteEvent(id: 4, pitch: 55, startBeat: 3, durationBeats: 1, velocity: 80),   // unknown hand: bass
+        ]
+        XCTAssertEqual(PracticeSteps.make(from: notes, clef: nil).count, 4)
+        XCTAssertEqual(PracticeSteps.make(from: notes, clef: .treble).map(\.noteIDs), [[0], [3]])
+        XCTAssertEqual(PracticeSteps.make(from: notes, clef: .bass).map(\.noteIDs), [[1], [2], [4]])
     }
 
     func testEngine() {
@@ -413,6 +449,11 @@ final class StaffLayoutTests: XCTestCase {
         var waltz = Song(title: "", timeSignatures: [TimeSignature(beat: 0, numerator: 3, denominator: 4)],
                          notes: [NoteEvent(id: 0, pitch: 60, startBeat: 0, durationBeats: 9, velocity: 80)])
         XCTAssertEqual(waltz.barlineBeats, [3, 6, 9])
+        XCTAssertEqual(waltz.barStartBeats, [0, 3, 6])
+        XCTAssertEqual(waltz.barIndex(atBeat: 0), 0)
+        XCTAssertEqual(waltz.barIndex(atBeat: 2.9), 0)
+        XCTAssertEqual(waltz.barIndex(atBeat: 3), 1)
+        XCTAssertEqual(waltz.barIndex(atBeat: 20), 2)
         waltz.timeSignatures.append(TimeSignature(beat: 6, numerator: 6, denominator: 8))
         XCTAssertEqual(waltz.barlineBeats, [3, 6, 9])
         XCTAssertEqual(TimeSignature(beat: 0, numerator: 4, denominator: 4).beatsPerBar, 4)
@@ -465,6 +506,26 @@ final class TimedModeTests: XCTestCase {
         XCTAssertEqual(engine.noteCount, 5)
     }
 
+    func testSeekBackOpensNotesAgainAndForwardSkips() {
+        var engine = TimedModeEngine(steps: PracticeSteps.make(from: notes), early: 0.5, late: 0.5, startBeat: -4)
+        engine.advance(to: 0)
+        _ = engine.noteOn(60)
+        _ = engine.noteOn(50)
+        engine.advance(to: 2.5)
+        XCTAssertEqual(engine.missedNotes, [1, 2, 3])
+        engine.seek(to: 0.8)
+        XCTAssertEqual(engine.judgedCount, 1, "the chord at 0 stays judged, the D's are open again")
+        XCTAssertEqual(engine.hitNotes, [0])
+        XCTAssertEqual(engine.missedNotes, [1])
+        XCTAssertEqual(engine.wrongCount, 1, "wrong notes are kept")
+        XCTAssertFalse(engine.skippedAhead, "going back is not skipping")
+        engine.advance(to: 1.2)
+        XCTAssertFalse(engine.skippedAhead, "still behind where it was before")
+        engine.seek(to: 3)
+        XCTAssertTrue(engine.skippedAhead)
+        XCTAssertEqual(engine.missedNotes, [1], "skipped notes are not counted as missed")
+    }
+
     func testLateSideIsWider() {
         var engine = TimedModeEngine(steps: PracticeSteps.make(from: notes), startBeat: -4)
         engine.advance(to: -0.6)
@@ -481,5 +542,164 @@ final class TimedModeTests: XCTestCase {
         XCTAssertEqual(song.beat(after: 1, from: 0, speed: 1), 2, "120 BPM")
         XCTAssertEqual(song.beat(after: 1, from: -4, speed: 0.5), -3, "count-in uses the first tempo, at half speed")
         XCTAssertEqual(song.beat(after: 1, from: 5, speed: 1), 6, "60 BPM after beat 4")
+    }
+
+    func testListenStatesAndSoundingPitches() {
+        let song = Song(title: "t", notes: [
+            NoteEvent(id: 0, pitch: 48, startBeat: 0, durationBeats: 4, velocity: 80, hand: .left),
+            NoteEvent(id: 1, pitch: 60, startBeat: 0, durationBeats: 1, velocity: 80, hand: .right),
+            NoteEvent(id: 2, pitch: 62, startBeat: 1, durationBeats: 1, velocity: 80, hand: .right),
+        ])
+        XCTAssertEqual(song.listenStates(atBeat: -1), [:], "nothing during a lead-in")
+        XCTAssertEqual(song.listenStates(atBeat: 0.5), [0: .next, 1: .next])
+        XCTAssertEqual(song.listenStates(atBeat: 1), [0: .next, 1: .played, 2: .next], "a note ends as the next starts")
+        XCTAssertEqual(song.soundingPitches(atBeat: 1.5), [48, 62])
+        XCTAssertEqual(song.soundingPitches(atBeat: 4), [])
+    }
+}
+
+final class NoteDrillTests: XCTestCase {
+    private func drillSong() -> Song {
+        Song(title: "t", notes: [
+            NoteEvent(id: 0, pitch: 60, startBeat: 0, durationBeats: 1, velocity: 80, hand: .right),
+            NoteEvent(id: 1, pitch: 64, startBeat: 1, durationBeats: 1, velocity: 80, hand: .right),
+            NoteEvent(id: 2, pitch: 67, startBeat: 2, durationBeats: 1, velocity: 80, hand: .right),
+            NoteEvent(id: 3, pitch: 48, startBeat: 0, durationBeats: 2, velocity: 80, hand: .left),
+            NoteEvent(id: 4, pitch: 60, startBeat: 2, durationBeats: 2, velocity: 80, hand: .left),
+        ])
+    }
+
+    func testNoteDrillOneHand() {
+        var drill = NoteDrill(song: drillSong(), clef: .treble, seed: 1)
+        var previous: UInt8?
+        for _ in 0..<50 {
+            XCTAssertEqual(drill.current.count, 1)
+            let note = drill.current[0]
+            XCTAssertTrue([60, 64, 67].contains(note.pitch))
+            XCTAssertEqual(StaffLayout.clef(for: note), .treble)
+            XCTAssertNotEqual(note.pitch, previous, "a prompt never repeats the one before")
+            previous = note.pitch
+            let wrong: UInt8 = note.pitch == 60 ? 62 : 60
+            XCTAssertEqual(drill.noteOn(wrong), .wrong(pitch: wrong), "wrong keys work as in wait mode")
+            drill.noteOff(wrong)
+            XCTAssertEqual(drill.engine.keyStates[note.pitch], .missed)
+            _ = drill.noteOn(note.pitch)
+            XCTAssertTrue(drill.isFound)
+            XCTAssertEqual(drill.current, [note], "the found note stays until its key is let go")
+            XCTAssertEqual(drill.engine.noteStates[note.id], .played)
+            drill.noteOff(note.pitch)
+            XCTAssertFalse(drill.isFound)
+        }
+        XCTAssertEqual(drill.foundCount, 50)
+        XCTAssertEqual(drill.engine.wrongCount, 50)
+        XCTAssertFalse(drill.engine.isFinished, "the drill never ends")
+    }
+
+    func testNoteDrillBothHands() {
+        var drill = NoteDrill(song: drillSong(), seed: 7)
+        for _ in 0..<50 {
+            let notes = drill.current
+            XCTAssertEqual(notes.map { StaffLayout.clef(for: $0) }, [.treble, .bass])
+            XCTAssertTrue([48, 60].contains(notes[1].pitch), "bass notes come from the left hand, C4 included")
+            XCTAssertNotEqual(notes[0].pitch, notes[1].pitch)
+            XCTAssertEqual(drill.noteOn(notes[0].pitch), .correct(pitch: notes[0].pitch), "both notes are needed")
+            let index = drill.foundCount
+            XCTAssertEqual(drill.noteOn(notes[1].pitch), .stepCompleted(index: index))
+            drill.noteOff(notes[0].pitch)
+            XCTAssertEqual(drill.current, notes, "the next notes wait until both keys are up")
+            drill.noteOff(notes[1].pitch)
+            XCTAssertNotEqual(drill.current, notes)
+        }
+        XCTAssertEqual(drill.foundCount, 50)
+    }
+
+    func testNoteDrillWithoutNotes() {
+        let song = Song(title: "t", notes: [NoteEvent(id: 0, pitch: 72, startBeat: 0, durationBeats: 1, velocity: 80, hand: .right)])
+        XCTAssertFalse(NoteDrill(song: song, clef: .bass).hasNotes)
+        let single = NoteDrill(song: song, seed: 3)
+        XCTAssertEqual(single.current.map(\.pitch), [72], "both hands with one empty staff asks for single notes")
+    }
+
+    func testDrillStatsSharesWithoutMistakesAreEven() {
+        XCTAssertEqual(NoteDrillStats().shares(of: [60, 62, 64, 65], clef: .treble), [0.25, 0.25, 0.25, 0.25])
+    }
+
+    func testDrillStatsKeepStavesApart() {
+        var stats = NoteDrillStats()
+        stats.record(pitch: 60, clef: .bass, missed: true)
+        XCTAssertGreaterThan(stats.missRate(pitch: 60, clef: .bass), 0)
+        XCTAssertEqual(stats.missRate(pitch: 60, clef: .treble), 0)
+    }
+
+    func testDrillStatsWeakNoteGetsMoreThenRecovers() {
+        let pitches = Array(UInt8(60)..<72)
+        var stats = NoteDrillStats()
+        for _ in 0..<20 { stats.record(pitch: 60, clef: .treble, missed: true) }
+        let weak = stats.shares(of: pitches, clef: .treble)
+        XCTAssertEqual(weak.reduce(0, +), 1, accuracy: 1e-9)
+        XCTAssertGreaterThan(weak[0], 0.25, "one weak note of twelve comes up about every third prompt")
+        XCTAssertLessThan(weak[0], 0.5)
+        for _ in 0..<30 { stats.record(pitch: 60, clef: .treble, missed: false) }
+        XCTAssertLessThan(stats.shares(of: pitches, clef: .treble)[0], 0.12, "getting it right brings it back to about even")
+    }
+
+    func testDrillStatsEveryNoteKeepsHalfItsEvenShare() {
+        let pitches = Array(UInt8(60)..<72)
+        var stats = NoteDrillStats()
+        for pitch in pitches.prefix(6) {
+            for _ in 0..<20 { stats.record(pitch: pitch, clef: .treble, missed: true) }
+        }
+        let shares = stats.shares(of: pitches, clef: .treble)
+        XCTAssertEqual(shares.reduce(0, +), 1, accuracy: 1e-9)
+        for share in shares { XCTAssertGreaterThanOrEqual(share, 0.5 / 12 - 1e-9) }
+        XCTAssertGreaterThan(shares[0], shares[11])
+    }
+
+    func testDrillStatsSurviveSaving() throws {
+        var stats = NoteDrillStats()
+        stats.record(pitch: 60, clef: .bass, missed: true)
+        let saved = try JSONEncoder().encode(stats)
+        XCTAssertEqual(try JSONDecoder().decode(NoteDrillStats.self, from: saved), stats)
+    }
+
+    /// Plays `drill` for `prompts` prompts, pressing a wrong key on `missed` pitches, and counts how often each is asked.
+    private func play(_ drill: inout NoteDrill, prompts: Int, missed: Set<UInt8>) -> [UInt8: Int] {
+        var asked: [UInt8: Int] = [:]
+        for _ in 0..<prompts {
+            let note = drill.current[0]
+            asked[note.pitch, default: 0] += 1
+            if missed.contains(note.pitch) {
+                _ = drill.noteOn(1)
+                drill.noteOff(1)
+            }
+            _ = drill.noteOn(note.pitch)
+            drill.noteOff(note.pitch)
+        }
+        return asked
+    }
+
+    func testNoteDrillAsksMissedNoteMoreButStillTheOthers() {
+        let notes = (0..<12).map { NoteEvent(id: $0, pitch: UInt8(60 + $0), startBeat: Double($0), durationBeats: 1, velocity: 80, hand: .right) }
+        var drill = NoteDrill(song: Song(title: "t", notes: notes), clef: .treble, seed: 5)
+        let asked = play(&drill, prompts: 3000, missed: [60])
+        XCTAssertGreaterThan(asked[60] ?? 0, 3000 / 6, "the missed note comes up over twice its even twelfth")
+        for pitch in UInt8(61)..<72 { XCTAssertGreaterThan(asked[pitch] ?? 0, 3000 / 24, "pitch \(pitch) still comes up") }
+        XCTAssertGreaterThan(drill.stats.missRate(pitch: 60, clef: .treble), 0.5)
+        XCTAssertEqual(drill.stats.missRate(pitch: 61, clef: .treble), 0)
+    }
+
+    func testNoteDrillBlamesOneMissPerPromptOnTheNearerNote() {
+        var drill = NoteDrill(song: drillSong(), seed: 7)
+        let notes = drill.current
+        // Two wrong keys right next to the bass note: one miss for the bass note, none for the treble note.
+        let near = notes[1].pitch + 1 == notes[0].pitch ? notes[1].pitch - 1 : notes[1].pitch + 1
+        _ = drill.noteOn(near)
+        drill.noteOff(near)
+        _ = drill.noteOn(near)
+        drill.noteOff(near)
+        _ = drill.noteOn(notes[0].pitch)
+        _ = drill.noteOn(notes[1].pitch)
+        XCTAssertEqual(drill.stats.missRate(pitch: notes[1].pitch, clef: .bass), 1.0 / 4, accuracy: 1e-9)
+        XCTAssertEqual(drill.stats.missRate(pitch: notes[0].pitch, clef: .treble), 0)
     }
 }
