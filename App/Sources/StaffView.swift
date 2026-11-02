@@ -11,7 +11,9 @@ import SwiftUI
 /// With `soloClef` set (one-hand practice) the other staff's clef and notes are greyed out; `onClefTap` is called
 /// when a clef is tapped. `onDrag` reports a sideways drag of the staff in beats (positive = to the right, i.e. back
 /// in the song) and whether it has ended.
-/// With `showMeasures` off (the note drill) there is no time signature and there are no bar lines.
+/// As a `flashCard` (the note drill) the notes at beat 0 sit in the middle of the staff, with no cursor, time signature
+/// or bar lines. With `drawsStaff` off only the notes are drawn, on a clear background, so they can be laid over a
+/// staff and fade in and out on their own.
 struct StaffView: View, Animatable {
     var song: Song
     var noteStates: [Int: WaitModeEngine.NoteState] = [:]
@@ -19,7 +21,8 @@ struct StaffView: View, Animatable {
     var scrollBeat: Double
     var fitBeats: Double? = nil
     var showFingers = true
-    var showMeasures = true
+    var flashCard = false
+    var drawsStaff = true
     var soloClef: Clef? = nil
     var onClefTap: ((Clef) -> Void)? = nil
     var onDrag: ((_ beats: Double, _ ended: Bool) -> Void)? = nil
@@ -46,25 +49,27 @@ struct StaffView: View, Animatable {
     }
 
     private func metrics(_ size: CGSize) -> Metrics {
-        Metrics(size: size, beatsPerBar: song.initialTimeSignature.beatsPerBar, fitBeats: fitBeats)
+        Metrics(size: size, beatsPerBar: song.initialTimeSignature.beatsPerBar, fitBeats: fitBeats, centered: flashCard)
     }
 
     private var canvas: some View {
         Canvas { context, size in
             let m = metrics(size)
-            drawStaves(&context, m)
-            drawClefsAndTime(&context, m)
+            if drawsStaff {
+                drawStaves(&context, m)
+                drawClefsAndTime(&context, m)
+            }
             var music = context
             music.clip(to: Path(CGRect(x: m.musicStartX, y: 0, width: size.width - m.musicStartX, height: size.height)))
-            if showMeasures { drawBarlines(&music, m) }
+            if !flashCard { drawBarlines(&music, m) }
             drawNotes(&music, m)
-            if fitBeats == nil { drawCursor(&context, m) }
+            if fitBeats == nil, !flashCard { drawCursor(&context, m) }
             for pitch in wrongPitches {
                 let note = NoteEvent(id: -1, pitch: pitch, startBeat: 0, durationBeats: 1, velocity: 0)
                 drawHead(&context, m, StaffLayout.place(note), x: m.cursorX + m.sp * 1.6, value: .quarter, color: .red)
             }
         }
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.white))
+        .background(RoundedRectangle(cornerRadius: 8).fill(drawsStaff ? Color.white : .clear))
     }
 
     private static let muted = Color.gray.opacity(0.35)
@@ -83,7 +88,7 @@ struct StaffView: View, Animatable {
         let cursorX: CGFloat
         let pxPerBeat: CGFloat
 
-        init(size: CGSize, beatsPerBar: Double, fitBeats: Double?) {
+        init(size: CGSize, beatsPerBar: Double, fitBeats: Double?, centered: Bool) {
             // Height: 4 spaces of ledger room above, 4 for each staff, 6 between, 4 below.
             sp = size.height / 22
             trebleBottom = sp * 8
@@ -97,7 +102,8 @@ struct StaffView: View, Animatable {
                 pxPerBeat = (staffRight - cursorX) / CGFloat(max(fitBeats, 1))
                 return
             }
-            cursorX = musicStartX + sp * 11      // room to see the last played notes
+            // Room to see the last played notes; a flash card puts the next note in the middle of the music instead.
+            cursorX = centered ? (musicStartX + staffRight) / 2 - sp * 1.6 : musicStartX + sp * 11
             // Zoom so that, from the next note at the cursor, two whole bars fit on screen plus
             // the first note of the bar after them (with room for its head).
             let firstNoteX = cursorX + sp * 1.6
@@ -139,7 +145,7 @@ struct StaffView: View, Animatable {
                      at: CGPoint(x: m.staffLeft + m.sp * 2, y: m.y(.treble, position: 3)))
         context.draw(Text("\u{1D122}").font(.system(size: m.sp * 5.5)).foregroundColor(ink(.bass)),
                      at: CGPoint(x: m.staffLeft + m.sp * 2.2, y: m.y(.bass, position: 7)))
-        guard showMeasures else { return }
+        guard !flashCard else { return }
         let sig = song.initialTimeSignature
         for clef in [Clef.treble, .bass] {
             for (number, position) in [(sig.numerator, 6), (sig.denominator, 2)] {

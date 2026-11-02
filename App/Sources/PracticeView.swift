@@ -30,6 +30,7 @@ struct PracticeView: View {
     @State private var drill: NoteDrill?
     /// The drill's hand: the staff its notes come from (nil = both, one note on each staff).
     @State private var drillClef: Clef?
+    private static let drillStatsKey = "noteDrillStats"
     /// While the staff is being dragged: the beat it started from, and the beat now under the cursor.
     @State private var dragFrom: Double?
     @State private var dragBeat: Double?
@@ -250,15 +251,26 @@ struct PracticeView: View {
 
     @ViewBuilder private var staff: some View {
         if let drill {
-            StaffView(song: Song(title: "", notes: drill.current),
-                      noteStates: drill.engine.noteStates,
-                      wrongPitches: drill.engine.keyStates.filter { $0.value == .wrong }.map(\.key).sorted(),
-                      scrollBeat: 0,
-                      showFingers: false,
-                      showMeasures: false,
-                      soloClef: drill.clef,
-                      onClefTap: tapClef)
-                .frame(height: 360)
+            // The notes sit on their own layer over the empty staff, so a found note can fade out to the left
+            // while the next one fades in from the right.
+            ZStack {
+                StaffView(song: Song(title: "", notes: []), scrollBeat: 0, flashCard: true,
+                          soloClef: drill.clef, onClefTap: tapClef)
+                StaffView(song: Song(title: "", notes: drill.current),
+                          noteStates: drill.engine.noteStates,
+                          wrongPitches: drill.engine.keyStates.filter { $0.value == .wrong }.map(\.key).sorted(),
+                          scrollBeat: 0,
+                          showFingers: false,
+                          flashCard: true,
+                          drawsStaff: false,
+                          soloClef: drill.clef)
+                    .allowsHitTesting(false)
+                    .id(drill.current.first?.id)
+                    .transition(.asymmetric(insertion: .offset(x: 40).combined(with: .opacity),
+                                            removal: .offset(x: -40).combined(with: .opacity)))
+            }
+            .animation(.easeInOut(duration: 0.35), value: drill.current.first?.id)
+            .frame(height: 360)
         } else if let song, listen.isPlaying {
             StaffView(song: song,
                       noteStates: song.listenStates(atBeat: listen.beat),
@@ -306,7 +318,7 @@ struct PracticeView: View {
     }
 
     private func releaseOnScreenKey(_ pitch: UInt8) {
-        let step = drill?.engine.currentStep ?? (timedMode ? nil : engine.currentStep)
+        let step = drill != nil ? drill?.engine.currentStep : timedMode ? nil : engine.currentStep
         if let chord = step?.pitches, chord.count > 1, chord.contains(pitch) {
             latched.insert(pitch)
         } else {
@@ -403,7 +415,19 @@ struct PracticeView: View {
         pauseAll()
         closeResult()
         releaseLatched()
-        drill = NoteDrill(song: song, clef: drillClef)
+        drill = makeDrill(song)
+    }
+
+    /// A drill that goes on from the misses saved so far (they are per note, across songs and launches).
+    private func makeDrill(_ song: Song) -> NoteDrill {
+        let saved = UserDefaults.standard.data(forKey: Self.drillStatsKey)
+        let stats = saved.flatMap { try? JSONDecoder().decode(NoteDrillStats.self, from: $0) }
+        return NoteDrill(song: song, clef: drillClef, stats: stats ?? NoteDrillStats())
+    }
+
+    private func saveDrillStats() {
+        guard let stats = drill?.stats, let data = try? JSONEncoder().encode(stats) else { return }
+        UserDefaults.standard.set(data, forKey: Self.drillStatsKey)
     }
 
     private func setDrillClef(_ clef: Clef?) {
@@ -490,6 +514,7 @@ struct PracticeView: View {
             case .wrong: flash = .red
             case .stepCompleted:
                 flash = .green
+                saveDrillStats()
                 DispatchQueue.main.async(execute: releaseLatched)
             default: break
             }
@@ -539,7 +564,7 @@ struct PracticeView: View {
             soloClef = nil
             engine = WaitModeEngine(steps: PracticeSteps.make(from: loaded.notes))
             timed.load(loaded, speed: speed)
-            if drill != nil { drill = NoteDrill(song: loaded, clef: drillClef) }
+            if drill != nil { drill = makeDrill(loaded) }
             loadError = nil
             lastSong = entry.url.lastPathComponent
         } catch {
