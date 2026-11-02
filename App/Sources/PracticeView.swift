@@ -9,6 +9,8 @@ import SwiftUI
 /// Dragging the staff sideways moves through the song (to the right = back); the bar slider and ◀ ▶ under it jump by bars.
 /// Notes mode is a drill: random notes from the song, one at a time (one per staff with both hands), until another mode
 /// is picked; the wait and timed runs are left where they were.
+/// The Overview button swaps the practice screen for the whole song in small staves, with its repeats marked; the keys are
+/// not judged meanwhile, and the song stays where it was.
 struct PracticeView: View {
     @EnvironmentObject private var midi: MIDIInputService
     @StateObject private var library = SongLibrary()
@@ -31,9 +33,14 @@ struct PracticeView: View {
     /// The drill's hand: the staff its notes come from (nil = both, one note on each staff).
     @State private var drillClef: Clef?
     private static let drillStatsKey = "noteDrillStats"
+    /// The song overview is showing. Off at launch, so the app always opens ready to practise.
+    @State private var showOverview = false
     /// While the staff is being dragged: the beat it started from, and the beat now under the cursor.
     @State private var dragFrom: Double?
     @State private var dragBeat: Double?
+    /// The bar the slider was last let go on, and when. Its thumb goes on settling for about 0.5 s and keeps sending values,
+    /// with no end event after them. Those only correct where the song lands: as a new move they would pin the staff there.
+    @State private var sliderRelease: (bar: Int, time: Date)?
     /// Timed mode was playing when the drag started, so it goes on (after a count-in) when the drag ends.
     @State private var resumeAfterDrag = false
     @State private var loadError: String?
@@ -56,17 +63,22 @@ struct PracticeView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
-                header
-                staff
-                if song != nil, !listen.isPlaying, drill == nil { barControls }
-                Spacer()
-                KeyboardView(range: keyboardRange,
-                             states: keyStates,
-                             pressed: midi.pressed,
-                             showLabels: showKeyLabels,
-                             onPress: { midi.simulate(.noteOn(pitch: $0, velocity: 100)) },
-                             onRelease: releaseOnScreenKey)
-                    .frame(height: 180)
+                if showOverview, let song {
+                    SongOverviewView(song: song, showFingers: showFingers)
+                        .id(songEntry?.url)
+                } else {
+                    header
+                    staff
+                    if song != nil, !listen.isPlaying, drill == nil { barControls }
+                    Spacer()
+                    KeyboardView(range: keyboardRange,
+                                 states: keyStates,
+                                 pressed: midi.pressed,
+                                 showLabels: showKeyLabels,
+                                 onPress: { midi.simulate(.noteOn(pitch: $0, velocity: 100)) },
+                                 onRelease: releaseOnScreenKey)
+                        .frame(height: 180)
+                }
             }
             .padding()
             .background(flash.opacity(0.15).animation(.easeOut(duration: 0.3), value: flash))
@@ -97,6 +109,12 @@ struct PracticeView: View {
                     }
                     .pickerStyle(.segmented)
                     .frame(width: 240)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    if song != nil, drill == nil {
+                        Toggle(isOn: $showOverview) { Label("Song Overview", systemImage: "rectangle.grid.1x2") }
+                            .toggleStyle(.button)
+                    }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     if note != nil {
@@ -159,6 +177,12 @@ struct PracticeView: View {
             timed.restart()
         }
         .onChange(of: speed) { _, new in timed.setSpeed(new); listen.setSpeed(new) }
+        .onChange(of: showOverview) { _, isOn in
+            guard isOn else { return }
+            pauseAll()
+            closeResult()
+            releaseLatched()
+        }
     }
 
     private enum Mode { case wait, timed, notes }
@@ -354,14 +378,28 @@ struct PracticeView: View {
         let bar = song?.barIndex(atBeat: dragBeat ?? currentBeat) ?? 0
         let sliderBar = Binding<Double>(
             get: { Double(bar) },
-            set: { beginMove(); dragBeat = starts[min(max(Int($0.rounded()), 0), starts.count - 1)] })
+            set: { value in
+                let target = min(max(Int(value.rounded()), 0), starts.count - 1)
+                if let release = sliderRelease, Date().timeIntervalSince(release.time) < 1 {
+                    if release.bar != target {
+                        sliderRelease?.bar = target
+                        move(to: starts[target], nearest: false)
+                    }
+                    return
+                }
+                beginMove()
+                dragBeat = starts[target]
+            })
         return HStack(spacing: 16) {
             Button {
                 guard let back = starts.last(where: { $0 < currentBeat - 1e-6 }) else { return }
                 beginMove(); move(to: back, nearest: false)
             } label: { Label("Bar Back", systemImage: "backward.end.fill") }
             Slider(value: sliderBar, in: 0...Double(max(starts.count - 1, 1)), step: 1) { editing in
-                if !editing, let dragBeat { move(to: dragBeat, nearest: false) }
+                guard !editing else { return }
+                // A quick flick can end before its first value arrives, so this also counts with no move under way.
+                sliderRelease = (song?.barIndex(atBeat: dragBeat ?? currentBeat) ?? 0, Date())
+                if let dragBeat { move(to: dragBeat, nearest: false) }
             }
             .disabled(starts.count < 2)
             Button {
@@ -415,6 +453,7 @@ struct PracticeView: View {
         pauseAll()
         closeResult()
         releaseLatched()
+        showOverview = false
         drill = makeDrill(song)
     }
 
@@ -475,10 +514,15 @@ struct PracticeView: View {
         midi.onEvent = { event in
             // While the song plays itself, keys are not judged.
             if listen.isPlaying, case .noteOn = event { return }
+            // The overview is for reading: playing must not move the song out of sight. Releases still go through,
+            // so a key held when it opened doesn't stay colored.
+            if showOverview, case .noteOn = event { return }
             if drill != nil {
                 handleDrill(event)
                 return
             }
+            // Playing means the move is over, even if the drag or slider never reported its end.
+            if case .noteOn = event, let dragBeat { move(to: dragBeat, nearest: false) }
             switch event {
             case .noteOn(let pitch, _) where timedMode:
                 if case .wrong = timed.noteOn(pitch) {

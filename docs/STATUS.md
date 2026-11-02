@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-11-01 (session 24: Notes mode asks missed notes more often)
+Last updated: 2026-11-01 (session 27: song overview looks for repeats in one hand)
 
 ## Where we are
 
@@ -277,10 +277,46 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   six notes at 50% 12% (4.6%). 7 new tests (43 pass). Catalyst build checked; **not tried in the running app or on the piano.**
   No screen shows the stats and there is no reset yet.
 
+- **Fix: staff froze after sliding the bar slider with one hand** (session 25, user's report): with one clef on, swiping the
+  slider back to the start left the notes still while the step count went on. The song lands on that hand's first note
+  (bar 9 in "Fingers 2 · Skips") while the thumb is on bar 1; the slider's values after the release (see Known issues) then
+  opened a new move that nothing ended, and `dragBeat` pinned the staff. Now those values only correct the landing spot, and
+  a note played during an unfinished move ends it, which also covers a cancelled staff drag. App-only change, so no new unit test.
+  Reproduced and checked in the iPad simulator with mouse events on the slider and the on-screen keys: slow and fast swipes,
+  left hand and both hands, 43 tests pass. **Not verified:** touch on the real iPad.
+
+- **Song overview** (session 26, user's request: see the whole piece small, and understand how a section forms and then repeats):
+  a toolbar button (`rectangle.grid.1x2`, not in Notes mode) swaps the practice screen for `SongOverviewView`: all the bars in
+  small staves, four to a line, scrolling vertically, grouped into sections with a letter and a tint. It shows the form
+  (A A′ B A), "24 bars, 16 to learn", a note per section ("Comes back at bar 17", "Same as bar 1", "Like bar 1, but bar 8 is
+  different"), an orange band on the bars a near-repeat changes, and collapsible tips on spotting repeats. Off at launch. Opening
+  it pauses timed mode and Listen, and note-ons are ignored while it shows, so playing can't move the song out of sight.
+  `SongForm` (PianoCore) finds the sections from the notes, since MIDI has no repeat signs: bars match on pitches and places in
+  the bar; the longest free stretch of 2+ bars that comes back wins, then the search repeats on what's left; a stretch counts
+  as a near-repeat if at most a quarter of its bars differ. Bars no repeat claimed form one "Plays once" section between the others.
+  On the 27 song files: 7 have repeats (positions 1 = A A, 2 = A B A, 3 = A B A, Ode to Joy = A A′), the other 20 say "No repeated
+  sections found". 12 new tests (55 pass). Seen in the iPad simulator, portrait, with mouse events: Ode to Joy, C + F positions
+  (scrolling, tips, step and wrong count kept across on/off), Minuet in G. **Not verified:** that the real piano is ignored while it
+  shows (the simulator has no MIDI input), landscape, and a long real piece.
+
+- **Song overview by hand** (session 27, user's request: focus on the repeating left-hand notes): a Both / Left / Right picker in the
+  overview. `SongForm(song:clef:)` then counts only that hand's notes (bar numbers stay those of the song), and the other staff is greyed
+  out. New for all views: one bar played twice or more in a row is a "one-bar pattern" section ("One bar played 4 times"), and rests
+  between repeats are their own "–" section and don't count as bars to learn. The picker goes back to both when the overview closes.
+  On the song files: left hand 11 of the 21 with left-hand notes have repeats, 7 of them not seen with both hands (Hands 2–6,
+  Positions C G F, Reading on your own); right hand 13 of 25; both hands unchanged at 7 of 27. 7 more tests (62 pass). Seen in the
+  iPad simulator on Hands 4 (both: none; left: A B A C). **Not verified:** landscape, a long real piece.
+
 **Not yet verified:** running on the real iPad; in-app Bluetooth pairing; the Songs sheet and import picker by hand.
 
 ## Next steps (in order)
 
+0. User to try the **song overview** (toolbar button) on real pieces, and its hand picker. Open questions: the same left-hand pattern on
+   other chords isn't seen (C-E-G then F-A-C), which may matter most for the left hand: compare shapes rather than notes? The same goes
+   for repeats in another key (C + F positions is the same shape in two keys). A single bar that comes back alone isn't marked (Hands 4,
+   left hand: bar 13 equals bar 1). A long "Plays once" stretch isn't split (positions 3 has 16 bars as one B; F and D could be told apart only
+   by key). Tap a bar to jump practice there? Should it keep the scroll place when reopened?
+0. User to try the **bar slider fix** on the real iPad with touch: with one clef on, play a few notes, swipe the bar back, play again; the notes should move.
 0. User to try **missed notes coming up more often** in Notes mode: does the mix feel right? Should the app show which notes
    are weak, or offer a reset? Should slow answers count as weak too?
 0. User to try **Notes mode** (the note drill). Open questions: a score/streak or timer ("how fast did I find it")? Show the note's name after a wrong key?
@@ -360,9 +396,18 @@ and team are already set up): connect the iPad, turn on Developer Mode, install 
 | 2026-10-09 | Result card at the end of a song: green if mistakes ≤ 10% of the notes, orange if more; the Difficult mark uses the same rule (was a fixed 5). |
 | 2026-10-09 | Lesson notes are Markdown files next to each song (`x.md` for `x.mid`, same level folder), shown after picking the song; closable and scrollable. |
 | 2026-10-06 | Song library: imported `.mid` files are **copied** into the app (Documents/Songs), so they stay if the original moves; the file name is the song title; the last song opens on launch. No database: the folder is the library. |
+| 2026-11-01 | Notes mode weighting: misses are kept per staff and pitch across songs (not per song); weight = 1 + 5 x recent miss rate, and the boosts together may not exceed the base weights, so every note keeps at least half its even share. Values chosen by Claude from simulation; the user has not tried them yet. |
 
 ## Known issues / caveats
 
+- `SongForm` needs exact timing: bars must match to 1/48 of a beat, so a `.mid` recorded by hand (not quantized) will show no repeats.
+- **The iOS 26 `Slider` keeps sending values after it is let go** (session 25, seen in the iPad simulator's log): `onEditingChanged(false)`
+  is followed by a stray `onEditingChanged(true)` and about 0.5 s of values while the thumb settles, with **no** closing `false`.
+  `PracticeView.sliderRelease` treats values in the second after a release as corrections to the landing spot, not as a new move.
+- Jumping ahead to the last step and playing it shows the "Perfect! You played the whole song" card, though most of the song
+  was skipped (seen in session 25). Progress isn't recorded for such a run (`skippedAhead`), but the card doesn't know that. Not fixed.
+- A very fast flick of the bar slider (32 ms in the simulator) can stop short of where it was aimed (bar 4 instead of bar 1).
+  The staff, step and thumb still agree, and sliding again works. Not looked into further.
 - The dev Mac is an **Intel Mac**. Xcode 26.3 is installed and selected (`xcode-select -p` → Xcode.app). The simulator is slow
   to launch the first time (about 15 s before the UI appears).
 - The iPad simulator runs its **own MIDIServer**: it does not see USB/Bluetooth MIDI devices connected to the Mac, and

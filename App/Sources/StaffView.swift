@@ -14,6 +14,8 @@ import SwiftUI
 /// As a `flashCard` (the note drill) the notes at beat 0 sit in the middle of the staff, with no cursor, time signature
 /// or bar lines. With `drawsStaff` off only the notes are drawn, on a clear background, so they can be laid over a
 /// staff and fade in and out on their own.
+/// As a `line` (one line of the song overview) it is a still picture of the bars from `scrollBeat` up to the line's end,
+/// with bar numbers, a tinted background and the changed bars marked.
 struct StaffView: View, Animatable {
     var song: Song
     var noteStates: [Int: WaitModeEngine.NoteState] = [:]
@@ -26,6 +28,19 @@ struct StaffView: View, Animatable {
     var soloClef: Clef? = nil
     var onClefTap: ((Clef) -> Void)? = nil
     var onDrag: ((_ beats: Double, _ ended: Bool) -> Void)? = nil
+    var line: Line? = nil
+
+    struct Line {
+        struct Bar {
+            var number: Int
+            var beats: Range<Double>
+            var isMarked: Bool
+        }
+        var bars: [Bar]
+        var tint: Color
+        var showsTimeSignature: Bool
+        var endBeat: Double { bars.last?.beats.upperBound ?? 0 }
+    }
 
     var animatableData: Double {
         get { scrollBeat }
@@ -55,6 +70,7 @@ struct StaffView: View, Animatable {
     private var canvas: some View {
         Canvas { context, size in
             let m = metrics(size)
+            if let line { drawBarMarks(&context, m, line) }
             if drawsStaff {
                 drawStaves(&context, m)
                 drawClefsAndTime(&context, m)
@@ -69,7 +85,7 @@ struct StaffView: View, Animatable {
                 drawHead(&context, m, StaffLayout.place(note), x: m.cursorX + m.sp * 1.6, value: .quarter, color: .red)
             }
         }
-        .background(RoundedRectangle(cornerRadius: 8).fill(drawsStaff ? Color.white : .clear))
+        .background(RoundedRectangle(cornerRadius: 8).fill(line?.tint ?? (drawsStaff ? Color.white : .clear)))
     }
 
     private static let muted = Color.gray.opacity(0.35)
@@ -145,7 +161,7 @@ struct StaffView: View, Animatable {
                      at: CGPoint(x: m.staffLeft + m.sp * 2, y: m.y(.treble, position: 3)))
         context.draw(Text("\u{1D122}").font(.system(size: m.sp * 5.5)).foregroundColor(ink(.bass)),
                      at: CGPoint(x: m.staffLeft + m.sp * 2.2, y: m.y(.bass, position: 7)))
-        guard !flashCard else { return }
+        guard !flashCard, line?.showsTimeSignature != false else { return }
         let sig = song.initialTimeSignature
         for clef in [Clef.treble, .bass] {
             for (number, position) in [(sig.numerator, 6), (sig.denominator, 2)] {
@@ -156,9 +172,24 @@ struct StaffView: View, Animatable {
         }
     }
 
+    /// Behind the staff: a band over each marked bar, and each bar's number at the top edge, clear of the finger numbers.
+    private func drawBarMarks(_ context: inout GraphicsContext, _ m: Metrics, _ line: Line) {
+        for bar in line.bars {
+            let left = x(atBeat: bar.beats.lowerBound, m) - m.sp * 1.6
+            let right = x(atBeat: bar.beats.upperBound, m) - m.sp * 1.6
+            if bar.isMarked {
+                context.fill(Path(CGRect(x: left, y: 0, width: right - left, height: m.bassBottom + m.sp * 4)),
+                             with: .color(.orange.opacity(0.35)))
+            }
+            context.draw(Text("\(bar.number)").font(.system(size: m.sp * 1.7, weight: .semibold)).foregroundColor(.black.opacity(0.6)),
+                         at: CGPoint(x: left + m.sp * 0.7, y: m.sp * 0.2), anchor: .topTrailing)
+        }
+    }
+
     private func drawBarlines(_ context: inout GraphicsContext, _ m: Metrics) {
         var path = Path()
         for beat in song.barlineBeats {
+            if let line, beat <= scrollBeat + 1e-6 || beat > line.endBeat + 1e-6 { continue }
             // Bar lines sit just before the first note of the bar.
             let x = x(atBeat: beat, m) - m.sp * 1.6
             path.move(to: CGPoint(x: x, y: m.y(.treble, position: 8)))
@@ -171,6 +202,7 @@ struct StaffView: View, Animatable {
         let visibleBeats = Double((m.staffRight - m.musicStartX) / m.pxPerBeat)
         var fingered: [FingerGroupKey: [(note: NoteEvent, color: Color)]] = [:]
         for note in song.notes {
+            if let line, note.startBeat < scrollBeat - 1e-6 || note.startBeat >= line.endBeat - 1e-6 { continue }
             let x = x(atBeat: note.startBeat, m)
             guard x > m.musicStartX - m.sp * 3, note.startBeat < scrollBeat + visibleBeats + 1 else { continue }
             let color: Color

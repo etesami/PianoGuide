@@ -50,6 +50,16 @@ xcrun simctl launch $SIM com.esnetsm.pianoguide
 xcrun simctl io $SIM screenshot shot.png
 ```
 
+Taps and drags can be scripted, which is how the bar slider bug was reproduced (session 25). A small throwaway Swift script
+posts `CGEvent` mouse events (`.leftMouseDown`, `.leftMouseDragged`, `.leftMouseUp`) to screen coordinates over the Simulator
+window, and the simulator treats them as touches. The script isn't in the repo. Bring the window to the front first, and check
+where things are with `screencapture -R`: the app can appear rotated in the window, so screen x and y may not match the app's.
+To see what the app received, add a temporary `NSLog` and read it back:
+
+```sh
+xcrun simctl spawn $SIM log show --last 2m --style compact --predicate 'eventMessage CONTAINS "DBG"'
+```
+
 ## Test with the piano on the Mac (Mac Catalyst)
 
 The simulator can't see MIDI devices plugged into the Mac, so to play the real FP-30X on the dev Mac,
@@ -108,6 +118,7 @@ once (steps 1 and 4 above); after that it also works over Wi-Fi.
 | `…/TestSongs.swift` | Songs for trying the import ("Ode to Joy", "Minuet in G"); written to `TestSongs/` |
 | `…/WaitModeEngine.swift` | `PracticeSteps` (chord grouping) and the wait-mode state machine |
 | `…/NoteDrill.swift` | Notes mode: endless random notes from a song, judged by a `WaitModeEngine`; `NoteDrillStats` asks missed notes more often |
+| `…/SongForm.swift` | Finds repeated sections from the notes (A A′ B A), for both hands or one, with a note per section |
 | `…/StaffLayout.swift` | Staff positions (clef, line/space, sharps, ledger lines), `NoteValue`, bar lines |
 | `…/PracticeResult.swift` | Result of a finished run (perfect / almost / needs practice), shown by `PracticeResultView` |
 | `…/SongProgress.swift` | Per-song progress: times completed, recent wrong notes, "difficult" rule (mistakes > 10% of the notes); the user's own `SongMark` (hard / interesting) |
@@ -121,6 +132,7 @@ once (steps 1 and 4 above); after that it also works over Wi-Fi.
 | `App/Sources/PracticeView.swift` | Main screen: wait mode on the chosen song (staff + keyboard); remembers the last song |
 | `App/Sources/SongLibrary.swift` | Bundled samples (subfolders = categories) + imported `.mid` files (copied to Documents/Songs); import, delete, load; each song's `SongProgress` (UserDefaults `songProgress`) |
 | `App/Sources/SongLibraryView.swift` | "Songs" sheet: category folders, pick a song, swipe to delete, Import button (`fileImporter`); completed (green check) and difficult (orange) marks; user marks (swipe right / long-press, "Marked" section); `SongMarkPicker` (also used by the flag button in `PracticeView`) |
+| `App/Sources/SongOverviewView.swift` | The whole song in small staves, grouped into its sections; the toolbar button in `PracticeView` turns it on (`StaffView.Line` draws each line) |
 | `App/Sources/StaffView.swift` | Grand staff drawn in a `Canvas`, scrolling past the cursor (`scrollBeat` is animatable) |
 | `App/Sources/KeyboardView.swift` | On-screen piano that can be tapped; note-name labels and key colors |
 
