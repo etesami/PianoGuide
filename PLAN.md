@@ -23,7 +23,7 @@ build and test instructions are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 **Later**
 - Practice each hand separately (left, right or both)
 - Loop a section (A–B repeat)
-- Metronome, plus the app playing the accompaniment or the other hand
+- Metronome, plus the app playing the accompaniment or the other hand (*started: Play Along, session 29*)
 - Show traditional staff notation (see §4)
 - Practice stats and history
 - Simple fingering hints when the file includes them (*started: finger numbers on the staff, from lyric events in `.mid`*)
@@ -192,8 +192,8 @@ document types so the app can open `.mid` and `.musicxml` files.
 | 2   | **Import & model**  | A `.mid` file loads into `Song`; the note list shows in a debug view; importer tests pass           | 🟡 parser done and tested; song library with import from the Files app (session 7); no "Open in…" yet |
 | 3   | **Piano roll**      | The song scrolls smoothly at 60/120 fps with a playhead, play/pause and tempo slider                | ⬜ |
 | 4   | **Wait mode**       | The song waits for the correct note or chord, with correct and wrong feedback                       | 🟡 engine done and tested; works with the real piano (Mac Catalyst), with green/red/orange key feedback; per-song progress (completed / difficult marks in the song list, session 10); user marks hard / interesting (session 11) |
-| 5   | **Play-along mode** | Hit windows, scoring, and a summary at the end of the song                                          | 🟡 timed mode (session 12): speed, metronome, pause, hit window ½ beat early / ¾ beat late, played/missed/wrong counts; result card (session 16); **Listen** plays the song by itself at the chosen speed (session 19) |
-| 6   | **Polish**          | Hand selection, A–B loop, metronome, latency calibration                                            | 🟡 hand selection in wait mode by tapping a clef (session 22); metronome exists in timed mode; Notes mode: a random-note finding drill from the song's notes, by hand (session 23), asking missed notes more often (session 24); song overview: the whole piece in small staves with its repeated sections marked (session 26), for both hands or one (session 27) |
+| 5   | **Play-along mode** | Hit windows, scoring, and a summary at the end of the song                                          | 🟡 timed mode (session 12): speed, metronome, pause, hit window ½ beat early / ¾ beat late, played/missed/wrong counts; result card (session 16); **Listen** plays the song by itself at the chosen speed (session 19); **Play Along**: the app plays the other hand, over MIDI to the piano, with a volume slider and metronome button (session 29) |
+| 6   | **Polish**          | Hand selection, A–B loop, metronome, latency calibration                                            | 🟡 hand selection in wait mode by tapping a clef (session 22), in timed mode too (session 29); metronome exists in timed mode; Notes mode: a random-note finding drill from the song's notes, by hand (session 23), asking missed notes more often (session 24); song overview: the whole piece in small staves with its repeated sections marked (session 26), for both hands or one (session 27) |
 | 7   | **MusicXML**        | MusicXML import (hands and fingering come from the file)                                            | ⬜ |
 | 8   | **Staff view**      | A second renderer that shows staff notation                                                         | 🟡 basic grand staff with cursor and note colors in wait mode (session 6); no rests, beams, dots, flats yet |
 

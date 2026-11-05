@@ -59,6 +59,9 @@ final class MIDIInputService: ObservableObject {
                 let word = words[i]
                 // Universal MIDI Packet, type 2 = MIDI 1.0 channel voice message (1 word).
                 guard word >> 28 == 0x2 else { continue }
+                // The app's own notes, in case a device sends what it receives back out: not the player's keys.
+                let channel = UInt8((word >> 16) & 0x0F)
+                guard channel != PianoOutput.notesChannel, channel != PianoOutput.clickChannel else { continue }
                 let status = UInt8((word >> 16) & 0xF0)
                 let pitch = UInt8((word >> 8) & 0x7F)
                 let velocity = UInt8(word & 0x7F)

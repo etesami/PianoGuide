@@ -5,9 +5,14 @@ import SwiftUI
 /// Timed mode for one song: a clock moves the playhead at the chosen speed (with a one-bar count-in),
 /// the metronome clicks every beat, and the engine judges the notes as the playhead passes them.
 /// After the staff is dragged to a new place (`seek`), the next Play first clicks one bar while the music waits.
+/// With a clef chosen, only that staff is judged; play-along (`accompanied`) also has the app play the other staff.
 final class TimedSession: ObservableObject {
     @Published private(set) var engine = TimedModeEngine(steps: [])
     @Published private(set) var isPlaying = false
+    /// The app plays the other staff in this run.
+    @Published private(set) var accompanied = false
+    /// The clicks go on after the count-in. The count-in always clicks, to show when to start.
+    var metronomeOn = true
     /// Called once when the playhead has passed the last note.
     var onFinished: (() -> Void)?
 
@@ -15,7 +20,10 @@ final class TimedSession: ObservableObject {
     private var speed = 1.0
     private var timer: Timer?
     private var lastTick: CFTimeInterval = 0
-    private let metronome = Metronome()
+    private let output = PianoOutput.shared
+    /// The staff the player plays (nil = both).
+    private var clef: Clef?
+    private var accompaniment: Accompaniment?
     /// Set by `seek`: the next Play starts with a one-bar count-in.
     private var countInPending = false
     /// During that count-in, a playhead that runs up to `engine.beat` (the music doesn't move).
@@ -24,18 +32,29 @@ final class TimedSession: ObservableObject {
     private var beatsPerBar: Double { max(1, song?.initialTimeSignature.beatsPerBar ?? 4) }
     var hasStarted: Bool { engine.beat > -beatsPerBar }
 
+    /// The whole song has gone by: the player's notes and, in play-along, the app's.
+    var isFinished: Bool { engine.isFinished && (!accompanied || accompaniment?.isFinished ?? true) }
+
     func load(_ song: Song, speed: Double) {
-        pause()
         self.song = song
         self.speed = speed
-        countInPending = false
-        engine = TimedModeEngine(steps: PracticeSteps.make(from: song.notes), startBeat: -beatsPerBar)
-        updateWindows()
+        setClef(nil)
+    }
+
+    /// Chooses the staff the player plays and starts again from the beginning.
+    func setClef(_ clef: Clef?) {
+        self.clef = clef
+        restart()
     }
 
     func restart() {
         guard let song else { return }
-        load(song, speed: speed)
+        pause()
+        accompanied = false
+        countInPending = false
+        engine = TimedModeEngine(steps: PracticeSteps.make(from: song.notes, clef: clef), startBeat: -beatsPerBar)
+        accompaniment = clef.map { Accompaniment(song: song, playerClef: $0) }
+        updateWindows()
     }
 
     func setSpeed(_ speed: Double) {
@@ -57,22 +76,25 @@ final class TimedSession: ObservableObject {
         pause()
         engine.seek(to: beat)
         countInPending = true
-        if resume { play() }
+        if resume { play(accompanied: accompanied) }
     }
 
-    func togglePlay() { isPlaying ? pause() : play() }
-
-    func play() {
-        guard song != nil else { return }
-        if engine.isFinished { restart() }
+    /// `accompanied`: the app plays the other staff (needs a clef chosen).
+    func play(accompanied: Bool = false) {
+        guard song != nil, !engine.steps.isEmpty else { return }
+        pause()
+        if isFinished { restart() }
+        self.accompanied = accompanied && accompaniment != nil
+        if self.accompanied { accompaniment?.seek(to: max(0, engine.beat)).forEach(output.stopNote) }
+        output.prepare()
         isPlaying = true
         lastTick = CACurrentMediaTime()
         if countInPending {
             countInPending = false
             countInBeat = engine.beat - beatsPerBar
-            if let start = countInBeat, start == floor(start) { metronome.click(accented: isBarStart(start)) }
+            if let start = countInBeat, start == floor(start) { output.click(accented: isBarStart(start)) }
         } else if !hasStarted {
-            metronome.click(accented: true)   // first click of the count-in
+            output.click(accented: true)   // first click of the count-in
         }
         let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in self?.tick() }
         RunLoop.main.add(timer, forMode: .common)
@@ -83,7 +105,8 @@ final class TimedSession: ObservableObject {
         timer?.invalidate()
         timer = nil
         isPlaying = false
-        metronome.stop()
+        output.stopClicks()
+        accompaniment?.silence().forEach(output.stopNote)
         if countInBeat != nil {
             countInBeat = nil
             countInPending = true
@@ -100,13 +123,18 @@ final class TimedSession: ObservableObject {
         let new = song.beat(after: now - lastTick, from: old, speed: speed)
         lastTick = now
         // A click on every whole beat crossed; bars count from beat 0, so the count-in's first beat is accented too.
-        if floor(new) > floor(old) { metronome.click(accented: isBarStart(floor(new))) }
+        let countingIn = new < 0 || (countInBeat != nil && new < engine.beat)
+        if floor(new) > floor(old), metronomeOn || countingIn { output.click(accented: isBarStart(floor(new))) }
         if countInBeat != nil {
             if new < engine.beat { countInBeat = new; return }
             countInBeat = nil
         }
         engine.advance(to: new)
-        if engine.isFinished {
+        if accompanied, let events = accompaniment?.advance(to: new) {
+            events.stops.forEach(output.stopNote)
+            events.starts.forEach { output.startNote($0.pitch, velocity: $0.velocity) }
+        }
+        if isFinished {
             pause()
             onFinished?()
         }

@@ -5,7 +5,8 @@ import SwiftUI
 /// (the song waits for each note) or timed mode (it moves on at the chosen speed with a metronome; misses are counted).
 /// Picking a song that has a lesson note shows the note first; the book button shows it again.
 /// In timed mode, Listen plays the song by itself at the chosen speed.
-/// In wait mode, tapping a clef practises only that hand; tapping a clef again goes back to both hands.
+/// In wait and timed mode, tapping a clef practises only that hand; tapping a clef again goes back to both hands.
+/// With a hand chosen, Listen becomes Play Along: the app plays the other hand while the player's hand is judged.
 /// Dragging the staff sideways moves through the song (to the right = back); the bar slider and ◀ ▶ under it jump by bars.
 /// Notes mode is a drill: random notes from the song, one at a time (one per staff with both hands), until another mode
 /// is picked; the wait and timed runs are left where they were.
@@ -25,7 +26,7 @@ struct PracticeView: View {
     /// The last song picked, as a file name ("twinkle.mid"); imported songs are looked up first.
     @AppStorage("lastSong") private var lastSong = ""
     @State private var engine = WaitModeEngine(steps: [])
-    /// Wait mode with one hand only: the staff whose notes are waited for (nil = both hands).
+    /// Practising one hand only: the staff the player plays (nil = both hands).
     /// One-hand runs are not recorded in the song's progress.
     @State private var soloClef: Clef?
     /// Notes mode (the note drill) is on while this is set.
@@ -54,6 +55,9 @@ struct PracticeView: View {
     @AppStorage("timedMode") private var timedMode = false
     /// Timed mode's speed as a fraction of the song's own tempo.
     @AppStorage("timedSpeed") private var speed = 0.75
+    @AppStorage("metronomeOn") private var metronomeOn = true
+    /// How loud the app's own sound is, through the piano or the device.
+    @AppStorage("appVolume") private var appVolume = 0.5
     @StateObject private var timed = TimedSession()
     /// Listen: the app plays the song by itself at the timed-mode speed.
     @StateObject private var listen = AutoPlayer()
@@ -177,6 +181,8 @@ struct PracticeView: View {
             timed.restart()
         }
         .onChange(of: speed) { _, new in timed.setSpeed(new); listen.setSpeed(new) }
+        .onChange(of: metronomeOn) { _, new in timed.metronomeOn = new }
+        .onChange(of: appVolume) { _, new in PianoOutput.shared.volume = Float(new) }
         .onChange(of: showOverview) { _, isOn in
             guard isOn else { return }
             pauseAll()
@@ -233,26 +239,52 @@ struct PracticeView: View {
         let e = timed.engine
         let percent = Int((speed * 100).rounded())
         let bpm = Int(((song?.bpm(atBeat: max(0, e.beat)) ?? 120) * speed).rounded())
-        return HStack(spacing: 20) {
-            Button { listen.stop(); timed.togglePlay() } label: {
-                Label(timed.isPlaying ? "Pause" : "Play", systemImage: timed.isPlaying ? "pause.fill" : "play.fill")
-                    .frame(minWidth: 90)
+        let hand = soloClef == .treble ? "right hand" : "left hand"
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 14) {
+                let playingAlong = timed.isPlaying && timed.accompanied
+                let playingSolo = timed.isPlaying && !timed.accompanied
+                Button { listen.stop(); playingSolo ? timed.pause() : timed.play() } label: {
+                    Label(playingSolo ? "Pause" : "Play", systemImage: playingSolo ? "pause.fill" : "play.fill")
+                        .frame(minWidth: 90)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(song == nil || playingAlong)
+                Button { toggleListen() } label: {
+                    if soloClef != nil {
+                        Label(playingAlong ? "Pause" : "Play Along", systemImage: playingAlong ? "pause.fill" : "pianokeys")
+                            .frame(minWidth: 90)
+                    } else {
+                        Label(listen.isPlaying ? "Stop" : "Listen", systemImage: listen.isPlaying ? "stop.fill" : "speaker.wave.2.fill")
+                            .frame(minWidth: 90)
+                    }
+                }
+                .buttonStyle(.bordered)
+                .disabled(song == nil)
+                Stepper("Speed \(percent)% · \(bpm) BPM", value: $speed, in: 0.25...1.5, step: 0.05)
+                    .fixedSize()
+                Toggle(isOn: $metronomeOn) {
+                    Label(metronomeOn ? "Metronome On" : "Metronome Off", systemImage: metronomeOn ? "metronome.fill" : "metronome")
+                        .labelStyle(.iconOnly)
+                }
+                .toggleStyle(.button)
+                HStack(spacing: 6) {
+                    Image(systemName: "speaker.fill").foregroundColor(.secondary)
+                    Slider(value: $appVolume, in: 0...1)
+                        .frame(minWidth: 70, maxWidth: 160)
+                        .accessibilityLabel("Volume of the app's sound")
+                    Image(systemName: "speaker.wave.3.fill").foregroundColor(.secondary)
+                }
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(song == nil)
-            Button { toggleListen() } label: {
-                Label(listen.isPlaying ? "Stop" : "Listen", systemImage: listen.isPlaying ? "stop.fill" : "speaker.wave.2.fill")
-                    .frame(minWidth: 90)
-            }
-            .buttonStyle(.bordered)
-            .disabled(song == nil)
-            Stepper("Speed \(percent)% · \(bpm) BPM", value: $speed, in: 0.25...1.5, step: 0.05)
-                .fixedSize()
             Text(listen.isPlaying ? "Listening: the song plays by itself at this speed"
-                 : e.isFinished && !e.steps.isEmpty
+                 : soloClef != nil && e.steps.isEmpty ? "This song has no notes for that hand"
+                 : timed.isFinished && !e.steps.isEmpty
                  ? "Finished! Played \(e.hitNotes.count) of \(e.noteCount) · missed \(e.missedCount) · wrong \(e.wrongCount)"
                  : timed.hasStarted
                     ? "Played \(e.hitNotes.count) of \(e.noteCount) · missed \(e.missedCount) · wrong \(e.wrongCount)"
+                    + (soloClef == nil ? "" : " · \(hand) only")
+                 : soloClef != nil
+                    ? "You play the \(hand). Play Along: the app plays the other hand after one bar of clicks"
                     : "Press Play: one bar of clicks, then the music moves on by itself")
                 .font(.headline)
         }
@@ -309,6 +341,8 @@ struct PracticeView: View {
                       wrongPitches: e.keyStates.filter { $0.value == .wrong }.map(\.key).sorted(),
                       scrollBeat: dragBeat ?? min(e.beat, song.durationBeats),
                       showFingers: showFingers,
+                      soloClef: soloClef,
+                      onClefTap: tapClef,
                       onDrag: dragStaff)
                 .frame(height: 360)
         } else if let song {
@@ -360,6 +394,7 @@ struct PracticeView: View {
         recordAbandoned()
         soloClef = soloClef == nil ? clef : nil
         engine = WaitModeEngine(steps: PracticeSteps.make(from: song.notes, clef: soloClef))
+        timed.setClef(soloClef)
     }
 
     /// Dragging the staff moves through the song: to the right goes back, to the left goes ahead.
@@ -479,7 +514,14 @@ struct PracticeView: View {
         listen.stop()
     }
 
+    /// With a hand chosen: play along, the app playing the other hand. Otherwise the app plays both by itself.
     private func toggleListen() {
+        if soloClef != nil {
+            listen.stop()
+            closeResult()
+            if timed.isPlaying && timed.accompanied { timed.pause() } else { timed.play(accompanied: true) }
+            return
+        }
         if listen.isPlaying { listen.stop(); return }
         guard let song else { return }
         timed.pause()
@@ -495,6 +537,8 @@ struct PracticeView: View {
 
     private func load() {
         installMIDIHandler()
+        timed.metronomeOn = metronomeOn
+        PianoOutput.shared.volume = Float(appVolume)
         timed.onFinished = {
             let e = timed.engine
             finish(PracticeResult(timed: true, total: e.noteCount, wrong: e.wrongCount, missed: e.missedCount))
@@ -573,7 +617,7 @@ struct PracticeView: View {
     /// The song was played to the end: record it and show the result card.
     private func finish(_ finished: PracticeResult) {
         let skipped = finished.timed ? timed.engine.skippedAhead : engine.skippedAhead
-        if let songEntry, finished.timed || soloClef == nil, !skipped {
+        if let songEntry, soloClef == nil, !skipped {
             library.updateProgress(of: songEntry) { $0.recordCompleted(mistakes: finished.mistakes, notes: finished.total) }
         }
         result = finished
@@ -588,7 +632,7 @@ struct PracticeView: View {
     private func recordAbandoned(timed isTimed: Bool) {
         guard let songEntry else { return }
         let e = timed.engine
-        if isTimed, timed.hasStarted, !e.isFinished {
+        if isTimed, soloClef == nil, timed.hasStarted, !e.isFinished {
             library.updateProgress(of: songEntry) { $0.recordAbandoned(mistakes: e.wrongCount + e.missedCount, notes: e.noteCount) }
         } else if !isTimed, soloClef == nil, !engine.isFinished {
             library.updateProgress(of: songEntry) { $0.recordAbandoned(mistakes: engine.wrongCount, notes: engine.noteCount) }

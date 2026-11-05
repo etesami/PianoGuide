@@ -702,4 +702,55 @@ final class NoteDrillTests: XCTestCase {
         XCTAssertEqual(drill.stats.missRate(pitch: notes[1].pitch, clef: .bass), 1.0 / 4, accuracy: 1e-9)
         XCTAssertEqual(drill.stats.missRate(pitch: notes[0].pitch, clef: .treble), 0)
     }
+
+    // MARK: - Accompaniment
+
+    private var twoHands: Song {
+        Song(title: "Two hands", notes: [
+            NoteEvent(id: 0, pitch: 48, startBeat: 0, durationBeats: 2, velocity: 70, hand: .left),
+            NoteEvent(id: 1, pitch: 60, startBeat: 0, durationBeats: 1, velocity: 80, hand: .right),
+            NoteEvent(id: 2, pitch: 62, startBeat: 1, durationBeats: 1, velocity: 80, hand: .right),
+            NoteEvent(id: 3, pitch: 50, startBeat: 2, durationBeats: 1, velocity: 70, hand: .left),
+        ])
+    }
+
+    func testAccompanimentPlaysOnlyTheOtherStaff() {
+        var part = Accompaniment(song: twoHands, playerClef: .bass)
+        XCTAssertEqual(part.advance(to: -1), Accompaniment.Events())
+        XCTAssertEqual(part.advance(to: 0).starts.map(\.pitch), [60])
+        let second = part.advance(to: 1)
+        XCTAssertEqual(second.stops, [60])
+        XCTAssertEqual(second.starts.map(\.pitch), [62])
+        XCTAssertFalse(part.isFinished)
+        XCTAssertEqual(part.advance(to: 2), Accompaniment.Events(stops: [62]))
+        XCTAssertTrue(part.isFinished)
+    }
+
+    func testAccompanimentHoldsOverlappingNotesOfOnePitch() {
+        var part = Accompaniment(song: Song(title: "", notes: [
+            NoteEvent(id: 0, pitch: 60, startBeat: 0, durationBeats: 2, velocity: 80, hand: .right),
+            NoteEvent(id: 1, pitch: 60, startBeat: 1, durationBeats: 2, velocity: 80, hand: .right),
+        ]), playerClef: .bass)
+        _ = part.advance(to: 1)
+        XCTAssertEqual(part.advance(to: 2).stops, [])
+        XCTAssertEqual(part.advance(to: 3).stops, [60])
+    }
+
+    func testAccompanimentSeekAndSilence() {
+        var part = Accompaniment(song: twoHands, playerClef: .treble)
+        _ = part.advance(to: 0)
+        XCTAssertEqual(part.silence(), [48])
+        XCTAssertEqual(part.advance(to: 1), Accompaniment.Events())   // not stopped twice
+        XCTAssertEqual(part.seek(to: 0), [])
+        XCTAssertEqual(part.advance(to: 0).starts.map(\.pitch), [48])   // going back plays it again
+        XCTAssertEqual(part.seek(to: 2), [48])
+        XCTAssertEqual(part.advance(to: 2).starts.map(\.pitch), [50])
+    }
+
+    func testWriterChannelSurvivesReading() throws {
+        let data = MIDIFileWriter.write(twoHands, channel: 1)
+        let read = try MIDIFileParser.parse(data)
+        XCTAssertEqual(read.notes.map(\.pitch).sorted(), [48, 50, 60, 62])
+        XCTAssertEqual(read.notes.first { $0.pitch == 48 }?.durationBeats, 2)
+    }
 }

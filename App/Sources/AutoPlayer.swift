@@ -5,40 +5,31 @@ import QuartzCore
 /// Listen mode: the app plays the whole song by itself at the timed-mode speed, so the player can hear how it
 /// should sound. The notes are scheduled on the audio clock by `AVAudioSequencer` (exact timing, follows the
 /// song's tempo changes); a 60 Hz timer only reads the position back to move the staff.
+/// The notes go to the connected piano over MIDI, or else to the sampler (see `PianoOutput`).
 final class AutoPlayer: ObservableObject {
     @Published private(set) var isPlaying = false
     /// The playhead in beats while playing.
     @Published private(set) var beat = 0.0
 
-    private let engine = AVAudioEngine()
-    private let sampler = AVAudioUnitSampler()
-    private lazy var sequencer = AVAudioSequencer(audioEngine: engine)
+    private let output = PianoOutput.shared
+    private lazy var sequencer = AVAudioSequencer(audioEngine: output.engine)
     private var song: Song?
     private var timer: Timer?
 
-    init() {
-        engine.attach(sampler)
-        engine.connect(sampler, to: engine.mainMixerNode, format: nil)
-        // macOS (Catalyst) ships a General MIDI sound bank with a piano; iPadOS doesn't, so there the sampler
-        // keeps its built-in plain tone.
-        let bank = URL(fileURLWithPath: "/System/Library/Components/CoreAudio.component/Contents/Resources/gs_instruments.dls")
-        if FileManager.default.fileExists(atPath: bank.path) {
-            try? sampler.loadSoundBankInstrument(at: bank, program: 0,
-                                                 bankMSB: UInt8(kAUSampler_DefaultMelodicBankMSB),
-                                                 bankLSB: UInt8(kAUSampler_DefaultBankLSB))
-        }
-    }
-
     func play(_ song: Song, speed: Double) {
         stop()
-        #if os(iOS)
-        try? AVAudioSession.sharedInstance().setCategory(.playback, options: .mixWithOthers)
-        try? AVAudioSession.sharedInstance().setActive(true)
-        #endif
+        output.prepare()
         do {
-            if !engine.isRunning { try engine.start() }
-            try sequencer.load(from: MIDIFileWriter.write(song), options: [])
-            for track in sequencer.tracks { track.destinationAudioUnit = sampler }
+            // The sequencer needs a running engine even when the notes go out over MIDI.
+            if !output.engine.isRunning { try output.engine.start() }
+            try sequencer.load(from: MIDIFileWriter.write(song, channel: PianoOutput.notesChannel), options: [])
+            for track in sequencer.tracks {
+                if let piano = output.destination {
+                    track.destinationMIDIEndpoint = piano
+                } else {
+                    track.destinationAudioUnit = output.sampler
+                }
+            }
             sequencer.rate = Float(speed)
             sequencer.currentPositionInBeats = 0
             sequencer.prepareToPlay()
@@ -59,7 +50,8 @@ final class AutoPlayer: ObservableObject {
         timer = nil
         guard isPlaying else { return }
         sequencer.stop()
-        for pitch in UInt8(0)...127 { sampler.stopNote(pitch, onChannel: 0) }
+        song?.soundingPitches(atBeat: beat).forEach(output.stopNote)
+        output.stopAllNotes()
         isPlaying = false
     }
 

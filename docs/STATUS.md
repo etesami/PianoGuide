@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-11-01 (session 28: README with screenshots)
+Last updated: 2026-11-05 (session 29: play along with one hand, sound through the piano over MIDI, volume, metronome button)
 
 ## Where we are
 
@@ -312,8 +312,29 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
 - **README with screenshots** (session 28): `README.md` rewritten, images in `docs/screenshots/` (iPad Pro 11-inch simulator, Ode to Joy).
   How they were taken is in [DEVELOPMENT.md](DEVELOPMENT.md#retake-the-readme-screenshots); retake them when the screens change.
 
+- **Play along with one hand, MIDI out, volume, metronome button** (session 29, user's request: "the app plays the right hand and I play the
+  left", and the app's sound through the piano is too loud to hear their own playing). In **timed mode**, tapping a clef now picks the hand
+  the player plays, as in wait mode (shared `soloClef`; the other staff is grey). With a hand chosen, **Listen becomes Play Along**: one bar of
+  clicks, then the app plays the other staff while the player's staff is scored (played/missed/wrong, result card). **Play** with a hand chosen
+  scores that hand with no app notes. No hand chosen: Play and Listen work as before. One-hand runs are not recorded in progress, in either mode.
+  Play-along runs on `TimedSession`'s clock (so pause, dragging, speed and scoring all work), with `PianoCore/Accompaniment.swift` (tested) saying which notes
+  start and stop; notes can be up to about 17 ms off. Listen with both hands stays on `AVAudioSequencer`.
+  **Sound goes to the piano over MIDI** when one is connected (`App/Sources/PianoOutput.swift`), otherwise to the sampler and `Metronome` as before.
+  The app's notes use **channel 2** (GM2 grand piano) and clicks **channel 10** (wood blocks), so the **volume slider** (Control Change 7, `@AppStorage("appVolume")`, default 50%)
+  shouldn't touch the player's keys. `MIDIInputService` ignores incoming notes on those two channels, in case a device echoes them.
+  The **metronome button** (`@AppStorage("metronomeOn")`) silences the clicks after the count-in; the count-in always clicks. Listen has no clicks, as before.
+  Roland's support page (seen only as a search snippet; the pages refuse automated fetching): the FP-30X receives on all 16 channels, channel 4 plays the piano's
+  selected tone, others play GM2 sounds. 66 tests pass; iOS simulator and Catalyst build. Seen in the simulator with a temporary hook (removed): left hand scored,
+  treble grey, controls fit in portrait. Against a virtual MIDI destination on the Mac (temporary hook, removed), the messages were right: setup, volume, count-in spacing, only the
+  other hand's notes in play-along, both hands in Listen, notes stopped on stop.
+  **Not verified:** anything on the real piano or by ear: whether the FP-30X obeys CC 7 on channel 2 and leaves the keys alone, how the GM2 piano and wood block
+  sound, the buttons by hand, MIDI over Bluetooth on the iPad.
+
 ## Next steps (in order)
 
+0. User to try **Play Along and the volume slider on the real piano**: does the slider change only the app's notes? Is the GM2 piano on channel 2 good enough
+   (channel 4 would play the piano's selected tone, but may share its volume with the keys)? Does the click sound right? Should a piano that is connected but
+   wanted silent have a way to send sound to the iPad instead? Should Listen with both hands also have clicks?
 0. User to try the **song overview** (toolbar button) on real pieces, and its hand picker. Open questions: the same left-hand pattern on
    other chords isn't seen (C-E-G then F-A-C), which may matter most for the left hand: compare shapes rather than notes? The same goes
    for repeats in another key (C + F positions is the same shape in two keys). A single bar that comes back alone isn't marked (Hands 4,
@@ -324,7 +345,7 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
    are weak, or offer a reset? Should slow answers count as weak too?
 0. User to try **Notes mode** (the note drill). Open questions: a score/streak or timer ("how fast did I find it")? Show the note's name after a wrong key?
 0. User to try **one-hand practice** (tap a clef in wait mode). Open questions: should a one-hand run count towards the
-   song's progress (maybe its own mark)? Should timed mode get it too? Should the choice stay when opening another song?
+   song's progress (maybe its own mark)? Should the choice stay when opening another song?
 0. User to try the **bar row** (◀ slider ▶): is one stop per bar right, or should it jump by phrases (4 bars)?
 0. User to try **dragging the staff** (wait and timed). Is the drag speed right (the music follows the pointer 1:1)?
    Should timed mode keep playing straight after the drag, without the one-bar count-in?
@@ -333,7 +354,7 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
    chapters/drills on request, then rebuild with `docs/guide/build.sh`.
 
 0. User to try **Listen** (timed mode). Is the Mac piano sound OK? For a real piano sound on the iPad, options: bundle a
-   small piano SoundFont (`.sf2`) for the sampler, or send the notes out to the FP-30X over MIDI. Pause/resume,
+   small piano SoundFont (`.sf2`) for the sampler (with a piano connected the notes now go to it over MIDI, session 29). Pause/resume,
    a count-in, or Listen in wait mode only if wanted.
 
 0. User to try the result card by finishing a song. Is 10% of the notes the right line between green and

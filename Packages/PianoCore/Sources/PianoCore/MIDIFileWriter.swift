@@ -4,7 +4,8 @@ import Foundation
 /// where everything is in one track and a reader has to guess the hands.
 /// Used to build test fixtures, the bundled sample songs and the test songs.
 public enum MIDIFileWriter {
-    public static func write(_ song: Song, ticksPerQuarter: Int = 480, singleTrack: Bool = false) -> Data {
+    /// `channel` is the MIDI channel of the notes, 0…15.
+    public static func write(_ song: Song, ticksPerQuarter: Int = 480, singleTrack: Bool = false, channel: UInt8 = 0) -> Data {
         func ticks(_ beat: Double) -> Int { Int((beat * Double(ticksPerQuarter)).rounded()) }
 
         // Track 0: conductor (title, tempo). Then right hand, left hand.
@@ -26,15 +27,15 @@ public enum MIDIFileWriter {
             for note in song.notes where hands.contains(note.hand) {
                 // Finger as a lyric just before the note-on (see MIDIFileParser).
                 if let finger = note.finger { events.append((ticks(note.startBeat), meta(0x05, Array("\(finger)".utf8)))) }
-                events.append((ticks(note.startBeat), [0x90, note.pitch, note.velocity]))
-                events.append((ticks(note.startBeat + note.durationBeats), [0x80, note.pitch, 0]))
+                events.append((ticks(note.startBeat), [0x90 | channel, note.pitch, note.velocity]))
+                events.append((ticks(note.startBeat + note.durationBeats), [0x80 | channel, note.pitch, 0]))
             }
             // Note-offs before note-ons at the same tick, so repeated notes stay separate.
             // At each tick: conductor meta events, then note-offs, then note-ons, each finger lyric right before
             // its note-on. The sort keeps the original order within a group.
             func order(_ e: (tick: Int, bytes: [UInt8])) -> Int {
                 let isLyric = e.bytes[0] == 0xFF && e.bytes[1] == 0x05
-                return e.bytes[0] == 0xFF && !isLyric ? 0 : e.bytes[0] == 0x80 ? 1 : 2
+                return e.bytes[0] == 0xFF && !isLyric ? 0 : e.bytes[0] & 0xF0 == 0x80 ? 1 : 2
             }
             events = events.enumerated().sorted { ($0.element.tick, order($0.element), $0.offset) < ($1.element.tick, order($1.element), $1.offset) }.map(\.element)
             tracks.append(events)

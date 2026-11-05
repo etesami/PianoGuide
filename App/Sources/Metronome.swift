@@ -8,6 +8,12 @@ final class Metronome {
     private lazy var accent = click(frequency: 1_760)
     private lazy var normal = click(frequency: 1_320)
 
+    /// How loud the clicks are, 0…1.
+    var volume: Float {
+        get { engine.mainMixerNode.outputVolume }
+        set { engine.mainMixerNode.outputVolume = newValue }
+    }
+
     init() {
         engine.attach(player)
         engine.connect(player, to: engine.mainMixerNode, format: format)
