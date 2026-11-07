@@ -10,6 +10,8 @@ import SwiftUI
 /// Dragging the staff sideways moves through the song (to the right = back); the bar slider and ◀ ▶ under it jump by bars.
 /// Notes mode is a drill: random notes from the song, one at a time (one per staff with both hands), until another mode
 /// is picked; the wait and timed runs are left where they were.
+/// The Paths button opens the guided paths: lessons whose steps are passed in order. A step opens its piece with the
+/// step's mode, hand and speed; a banner says what to do, and a finished run counts towards the step if it was played that way.
 /// The Overview button swaps the practice screen for the whole song in small staves, with its repeats marked; the keys are
 /// not judged meanwhile, and the song stays where it was.
 struct PracticeView: View {
@@ -63,6 +65,13 @@ struct PracticeView: View {
     @StateObject private var listen = AutoPlayer()
     /// Shown as a card over the screen when a song has been played to the end.
     @State private var result: PracticeResult?
+    @StateObject private var paths = PathStore()
+    /// The guided-path step open now (its piece is the song on screen), or nil.
+    @State private var pathStep: PathSelection?
+    @State private var showPaths = false
+    @State private var screenHeight: CGFloat = 1000
+    /// What the last finished run did for the open step, shown on the result card.
+    @State private var pathOutcome: PathProgress.Outcome?
 
     var body: some View {
         NavigationStack {
@@ -71,10 +80,11 @@ struct PracticeView: View {
                     SongOverviewView(song: song, showFingers: showFingers)
                         .id(songEntry?.url)
                 } else {
+                    if let pathStep { pathBanner(pathStep) }
                     header
                     staff
                     if song != nil, !listen.isPlaying, drill == nil { barControls }
-                    Spacer()
+                    Spacer(minLength: 0)
                     KeyboardView(range: keyboardRange,
                                  states: keyStates,
                                  pressed: midi.pressed,
@@ -85,12 +95,20 @@ struct PracticeView: View {
                 }
             }
             .padding()
+            // The height left for the practice screen: in landscape the path banner shrinks to one line.
+            .background(GeometryReader { geo in
+                Color.clear
+                    .onAppear { screenHeight = geo.size.height }
+                    .onChange(of: geo.size.height) { _, height in screenHeight = height }
+            })
             .background(flash.opacity(0.15).animation(.easeOut(duration: 0.3), value: flash))
             .overlay {
                 if let result {
                     PracticeResultView(result: result,
+                                       pathNote: pathNote,
                                        onAgain: { closeResult(); engine.reset(); timed.restart() },
-                                       onClose: closeResult)
+                                       onClose: closeResult,
+                                       onNextStep: nextStepAction)
                 }
             }
             .animation(.spring(duration: 0.35), value: result)
@@ -98,6 +116,9 @@ struct PracticeView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { pauseAll(); showLibrary = true } label: { Label("Songs", systemImage: "music.note.list") }
+                }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { pauseAll(); showPaths = true } label: { Label("Paths", systemImage: "map") }
                 }
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Restart") {
@@ -159,6 +180,9 @@ struct PracticeView: View {
                 notePending = false
             }) {
                 SongLibraryView(library: library, current: songEntry, onPick: { open($0); notePending = true })
+            }
+            .sheet(isPresented: $showPaths) {
+                PathsView(store: paths, active: pathStep, onStart: { step, path in startStep(step, in: path) })
             }
             .sheet(isPresented: $showNote) {
                 if let note { PracticeNoteView(note: note, songName: song?.title ?? "") }
@@ -326,14 +350,16 @@ struct PracticeView: View {
                                             removal: .offset(x: -40).combined(with: .opacity)))
             }
             .animation(.easeInOut(duration: 0.35), value: drill.current.first?.id)
-            .frame(height: 360)
+            .frame(minHeight: 160, maxHeight: 360)
+                .layoutPriority(1)
         } else if let song, listen.isPlaying {
             StaffView(song: song,
                       noteStates: song.listenStates(atBeat: listen.beat),
                       wrongPitches: [],
                       scrollBeat: min(listen.beat, song.durationBeats),
                       showFingers: showFingers)
-                .frame(height: 360)
+                .frame(minHeight: 160, maxHeight: 360)
+                .layoutPriority(1)
         } else if let song, timedMode {
             let e = timed.engine
             StaffView(song: song,
@@ -344,7 +370,8 @@ struct PracticeView: View {
                       soloClef: soloClef,
                       onClefTap: tapClef,
                       onDrag: dragStaff)
-                .frame(height: 360)
+                .frame(minHeight: 160, maxHeight: 360)
+                .layoutPriority(1)
         } else if let song {
             StaffView(song: song,
                       noteStates: engine.noteStates,
@@ -355,7 +382,8 @@ struct PracticeView: View {
                       onClefTap: tapClef,
                       onDrag: dragStaff)
                 .animation(.easeInOut(duration: 0.3), value: engine.currentIndex)
-                .frame(height: 360)
+                .frame(minHeight: 160, maxHeight: 360)
+                .layoutPriority(1)
         }
     }
 
@@ -543,6 +571,11 @@ struct PracticeView: View {
             let e = timed.engine
             finish(PracticeResult(timed: true, total: e.noteCount, wrong: e.wrongCount, missed: e.missedCount))
         }
+        listen.onFinished = {
+            // Reads the speed from the player: this closure keeps the @AppStorage value from when it was made.
+            guard let pathStep else { return }
+            paths.record(PathStep.Run(mode: .listen, hand: soloClef, speed: listen.speed), of: pathStep.step, in: pathStep.path)
+        }
         guard song == nil else { return }
         let all = library.imported + library.allSamples
         guard let entry = all.first(where: { $0.url.lastPathComponent == lastSong }) ?? library.samples.first else {
@@ -620,10 +653,89 @@ struct PracticeView: View {
         if let songEntry, soloClef == nil, !skipped {
             library.updateProgress(of: songEntry) { $0.recordCompleted(mistakes: finished.mistakes, notes: finished.total) }
         }
+        if let pathStep {
+            // The speed comes from the session: this may run in a closure that keeps an old @AppStorage value.
+            let mode: PathStep.Mode = !finished.timed ? .wait : timed.accompanied ? .playAlong : .timed
+            let run = PathStep.Run(mode: mode, hand: soloClef, speed: timed.speed, result: finished, skippedAhead: skipped)
+            pathOutcome = paths.record(run, of: pathStep.step, in: pathStep.path)
+        }
         result = finished
     }
 
-    private func closeResult() { result = nil }
+    private func closeResult() { result = nil; pathOutcome = nil }
+
+    // MARK: Guided paths
+
+    /// Opens a path step: its piece, with the step's mode, hand and speed. Leaves the song that was open (recording it as usual).
+    private func startStep(_ step: PathStep, in path: GuidedPath) {
+        listen.stop()
+        timed.pause()
+        closeResult()
+        releaseLatched()
+        recordAbandoned()
+        drill = nil
+        showOverview = false
+        song = step.song
+        songEntry = nil
+        note = nil
+        loadError = nil
+        pathStep = PathSelection(path: path, step: step)
+        soloClef = step.hand
+        if step.mode != .wait { speed = step.speed }
+        engine = WaitModeEngine(steps: PracticeSteps.make(from: step.song.notes, clef: soloClef))
+        timed.load(step.song, speed: speed)
+        timed.setClef(soloClef)
+        timedMode = step.mode != .wait
+    }
+
+    /// The screen is set up the step's way: mode, hand, and at least its speed. (Play vs Play Along is only known
+    /// once a run starts; the banner says which to press.)
+    private func settingsMatch(_ step: PathStep) -> Bool {
+        guard drill == nil, soloClef == step.hand, timedMode == (step.mode != .wait) else { return false }
+        return step.mode == .wait || speed >= step.speed - 1e-6
+    }
+
+    /// Opens the next step once the open one is passed.
+    private var nextStepAction: (() -> Void)? {
+        guard let pathStep, paths.progress(of: pathStep.path).isPassed(pathStep.step),
+              let next = pathStep.path.step(after: pathStep.step) else { return nil }
+        return { startStep(next, in: pathStep.path) }
+    }
+
+    /// The result card's line about the path step.
+    private var pathNote: (text: String, good: Bool)? {
+        guard let pathStep, let pathOutcome else { return nil }
+        let step = pathStep.step
+        switch pathOutcome {
+        case .passed:
+            return (pathStep.path.step(after: step).map { "Step passed! Next: \($0.title)" } ?? "Step passed: the path is done!", true)
+        case .counted(let streak, let runs):
+            return ("Good run: \(streak) of \(runs) in a row. Once more!", true)
+        case .startAgain(let runs):
+            return ("This step needs \(runs) good runs in a row, so the count starts again.", false)
+        case .notCounted:
+            if paths.progress(of: pathStep.path).isPassed(step) { return nil }
+            return ("Not counted for the step: play it as \(step.settingsSummary).", false)
+        }
+    }
+
+    private func pathBanner(_ selection: PathSelection) -> some View {
+        PathStepBanner(selection: selection,
+                       compact: screenHeight < 850,
+                       progress: paths.progress(of: selection.path),
+                       settingsMatch: settingsMatch(selection.step),
+                       onUseSettings: { startStep(selection.step, in: selection.path) },
+                       onNext: nextStepAction,
+                       onShowPath: { pauseAll(); showPaths = true },
+                       onLeave: leavePath)
+    }
+
+    /// Closes the path step and goes back to the last song from the library.
+    private func leavePath() {
+        pathStep = nil
+        let all = library.imported + library.allSamples
+        if let entry = all.first(where: { $0.url.lastPathComponent == lastSong }) ?? library.samples.first { open(entry) }
+    }
 
     /// Leaving a song before the end still counts its wrong notes towards the difficult mark.
     /// In timed mode, missed notes count as mistakes too.
@@ -648,6 +760,7 @@ struct PracticeView: View {
             recordAbandoned()
             song = loaded
             songEntry = entry
+            pathStep = nil
             note = library.note(for: entry)
             soloClef = nil
             engine = WaitModeEngine(steps: PracticeSteps.make(from: loaded.notes))

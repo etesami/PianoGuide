@@ -193,7 +193,7 @@ document types so the app can open `.mid` and `.musicxml` files.
 | 3   | **Piano roll**      | The song scrolls smoothly at 60/120 fps with a playhead, play/pause and tempo slider                | ⬜ |
 | 4   | **Wait mode**       | The song waits for the correct note or chord, with correct and wrong feedback                       | 🟡 engine done and tested; works with the real piano (Mac Catalyst), with green/red/orange key feedback; per-song progress (completed / difficult marks in the song list, session 10); user marks hard / interesting (session 11) |
 | 5   | **Play-along mode** | Hit windows, scoring, and a summary at the end of the song                                          | 🟡 timed mode (session 12): speed, metronome, pause, hit window ½ beat early / ¾ beat late, played/missed/wrong counts; result card (session 16); **Listen** plays the song by itself at the chosen speed (session 19); **Play Along**: the app plays the other hand, over MIDI to the piano, with a volume slider and metronome button (session 29) |
-| 6   | **Polish**          | Hand selection, A–B loop, metronome, latency calibration                                            | 🟡 hand selection in wait mode by tapping a clef (session 22), in timed mode too (session 29); metronome exists in timed mode; Notes mode: a random-note finding drill from the song's notes, by hand (session 23), asking missed notes more often (session 24); song overview: the whole piece in small staves with its repeated sections marked (session 26), for both hands or one (session 27) |
+| 6   | **Polish**          | Hand selection, A–B loop, metronome, latency calibration                                            | 🟡 hand selection in wait mode by tapping a clef (session 22), in timed mode too (session 29); metronome exists in timed mode; Notes mode: a random-note finding drill from the song's notes, by hand (session 23), asking missed notes more often (session 24); song overview: the whole piece in small staves with its repeated sections marked (session 26), for both hands or one (session 27); **guided paths**: ordered lessons with pass gates, first path "Two Hands Together" on Ghoghaye Setaregan (session 30) |
 | 7   | **MusicXML**        | MusicXML import (hands and fingering come from the file)                                            | ⬜ |
 | 8   | **Staff view**      | A second renderer that shows staff notation                                                         | 🟡 basic grand staff with cursor and note colors in wait mode (session 6); no rests, beams, dots, flats yet |
 
@@ -210,3 +210,25 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done (verified on iPad).
 5. **Project file:** Use XcodeGen (`project.yml`).
 6. **Name:** "PianoGuide", bundle ID `com.esnetsm.pianoguide`.
 7. **GitHub:** I will push later.
+
+---
+
+## 10. What worked (keep doing this)
+
+**Guided paths (session 30): confirmed by you as a very good plan and implementation.** Use the same recipe for the next paths
+(e.g. the chorus of Ghoghaye Setaregan, or another song):
+
+- **Built on a song you like**, not on abstract drills: every exercise is a cut-down version of the real music (here the verse of
+  Ghoghaye Setaregan, from your own arrangement), so each step is practice for the piece itself.
+- **One problem, attacked in small layers.** For two-hand coordination: know each hand alone → make the left-hand pattern automatic
+  → hear both parts while playing one (Play Along) → hands together with the left hand cut down to one note per bar → add the chord
+  → full waltz under a simplified melody → the real thing. Only one new thing at a time.
+- **Wait mode before timed mode at every layer**, then the speed in small rungs (50 → 65 → 80 → 100%). Short parts (8 bars) first,
+  then joined into the whole verse.
+- **Steps that must be passed in order, with a clear gate:** a green result (≤ 10% mistakes), usually **two good runs in a row**, so
+  a step is passed by a steady hand, not a lucky one. Every lesson states its **goal** and a few **tips**; every step says exactly
+  what to press.
+- **Reuse what the app already has** (wait/timed modes, one hand by clef, Play Along, Listen, result card) instead of new modes; the
+  path only sets them up and checks the result. Pieces are generated in `PianoCore` from note data, so they are tested.
+- **The plan came first** (findings + plan in a few lines, then building), and the result was checked on screen in the simulator,
+  including landscape, before calling it done.

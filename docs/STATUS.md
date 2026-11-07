@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-11-05 (session 29: play along with one hand, sound through the piano over MIDI, volume, metronome button)
+Last updated: 2026-11-06 (session 30: guided paths, "Two Hands Together" on Ghoghaye Setaregan)
 
 ## Where we are
 
@@ -330,7 +330,41 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   **Not verified:** anything on the real piano or by ear: whether the FP-30X obeys CC 7 on channel 2 and leaves the keys alone, how the GM2 piano and wood block
   sound, the buttons by hand, MIDI over Bluetooth on the iPad.
 
+- **Guided paths** (session 30, user's request: "my left and right hand coordination really sucks … one hand is fine, two hands I lose
+  track"; a step-by-step path assuming severe lack of coordination, on Ghoghaye Setaregan). A **Paths** toolbar button (`map`, next to Songs)
+  opens a sheet with the path's lessons: each has a **goal**, collapsible **tips** and **steps that open in order** (passed = green check,
+  next = play icon, later = lock; passed steps can be replayed; "Start Over…" in the ⋯ menu). A step is one piece played one way:
+  **listen**, **wait**, **timed** (Play, one hand or both) or **play along** (the app plays the other hand), with a hand and a speed.
+  Opening a step loads its piece and sets mode, hand (`soloClef`) and speed (overwrites the saved speed); a **banner** above the header
+  shows lesson / step, the instruction and what passing needs, warns in orange when the screen's settings won't count (with **Use Step
+  Settings**), and has Steps, Leave (back to the last library song) and, once passed, **Next Step**. A finished run counts if played the
+  step's way (same mode and hand, at least its speed, no jump ahead) and the result card is green (≤ 10% mistakes); most steps need
+  **2 good runs in a row**, and a run with too many mistakes starts the count again. The result card adds a line ("Good run: 1 of 2 in a
+  row", "Step passed! Next: …") and a Next Step button. Listen steps pass by listening to the end (`AutoPlayer.onFinished`). Path runs
+  don't touch song progress (path pieces aren't library files). Progress: `PathStore`, UserDefaults `pathProgress`.
+  Core: `GuidedPath.swift` (model, `PathStep.verdict`, `PathProgress`), `SetaregaanPieces.swift` (pieces built at run time, not files:
+  score bars 3–26 of the user's arrangement from `ghoghaye_setaregan.py` in their Google Drive, 3/4, 100 BPM, finger on every note; three
+  8-bar sections + the 24-bar verse; left hand as low notes / low note + chord / full waltz, right hand as melody / one held note per bar),
+  `TwoHandsPath.swift` (content). **Two Hands Together**, 10 lessons, 38 steps: 1 Meet the song (listen, each hand alone) · 2 Left hand on
+  autopilot (timed 60/80/100%) · 3 Hear the hands together (play along each hand) · 4 Meet on beat one (left hand low notes only) · 5 Add
+  the chord · 6 Full waltz, simple melody · 7 Section 1 hands together (wait, 50/65/80%) · 8 Section 2: the run · 9 Section 3 · 10 The whole
+  verse up to 100%. 7 new tests (73 pass); iOS simulator and Catalyst build. Seen in the simulator with a temporary hook (removed): the sheet
+  with seeded progress, step 4.1 (wait, low notes) and 3.2 (play along, treble greyed). **Not verified:** tapping through the sheet and
+  banner, a run counting/passing by hand, Listen passing, the real piano.
+  **Fix (same session, user's report: in landscape the top of the screen slid under the title and toolbar):** the staff had a fixed
+  360 pt height, so the screen couldn't shrink once the banner was added. The staff now takes 160–360 pt (layout priority, so it
+  still gets its full height when there is room), and when the practice area is under 850 pt tall (iPad landscape) the banner is one
+  line ("L7.2 · Half speed: Timed 50% · both hands", ⓘ popover with the instruction, "0 of 2", Use Step Settings when needed).
+  Checked in the iPad Pro 11" simulator: landscape with a step and with a regular song, portrait with a step (unchanged).
+  **Fix (user's report: the result card's buttons stuck out of the card):** with Next Step there were three large buttons in one row,
+  wider than the 460 pt card. Next Step now has its own full-width row, with Practice Again (no longer prominent) and Close below it;
+  without a next step the row is as before. Seen in the simulator (landscape) with a temporary hook (removed).
+
 ## Next steps (in order)
+
+0. User to try the **Two Hands Together** path (Paths button) on the real piano. Open questions: is the step size right, or does
+   some step need an easier one before it? Is "2 good runs in a row" at ≤ 10% mistakes too strict or too loose? Should the path
+   remember the open step on relaunch? Next path: the song's chorus (bars 27–52) the same way, if wanted.
 
 0. User to try **Play Along and the volume slider on the real piano**: does the slider change only the app's notes? Is the GM2 piano on channel 2 good enough
    (channel 4 would play the piano's selected tone, but may share its volume with the keys)? Does the click sound right? Should a piano that is connected but
