@@ -10,6 +10,10 @@ final class AutoPlayer: ObservableObject {
     @Published private(set) var isPlaying = false
     /// The playhead in beats while playing.
     @Published private(set) var beat = 0.0
+    /// The speed it plays at (a share of the song's tempo).
+    private(set) var speed = 1.0
+    /// Called when the song has played to its end by itself (not when stopped).
+    var onFinished: (() -> Void)?
 
     private let output = PianoOutput.shared
     private lazy var sequencer = AVAudioSequencer(audioEngine: output.engine)
@@ -38,6 +42,7 @@ final class AutoPlayer: ObservableObject {
             return
         }
         self.song = song
+        self.speed = speed
         beat = 0
         isPlaying = true
         let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in self?.tick() }
@@ -56,6 +61,7 @@ final class AutoPlayer: ObservableObject {
     }
 
     func setSpeed(_ speed: Double) {
+        self.speed = speed
         sequencer.rate = Float(speed)
     }
 
@@ -63,6 +69,9 @@ final class AutoPlayer: ObservableObject {
         guard let song else { return }
         beat = sequencer.currentPositionInBeats
         // Let the last notes ring out to their full length, then stop.
-        if beat >= song.durationBeats { stop() }
+        if beat >= song.durationBeats {
+            stop()
+            onFinished?()
+        }
     }
 }

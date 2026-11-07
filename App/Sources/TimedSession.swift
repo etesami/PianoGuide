@@ -17,7 +17,8 @@ final class TimedSession: ObservableObject {
     var onFinished: (() -> Void)?
 
     private var song: Song?
-    private var speed = 1.0
+    /// Share of the song's tempo.
+    private(set) var speed = 1.0
     private var timer: Timer?
     private var lastTick: CFTimeInterval = 0
     private let output = PianoOutput.shared

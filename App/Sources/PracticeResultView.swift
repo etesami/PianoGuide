@@ -5,8 +5,12 @@ import SwiftUI
 /// (no or only a few mistakes), orange when it needs more practice (the same run that marks the song difficult).
 struct PracticeResultView: View {
     let result: PracticeResult
+    /// What the run did for the open path step, if any.
+    var pathNote: (text: String, good: Bool)?
     let onAgain: () -> Void
     let onClose: () -> Void
+    /// Opens the next path step (shown when the open step is passed).
+    var onNextStep: (() -> Void)?
 
     private var color: Color { result.grade.passed ? .green : .orange }
 
@@ -59,14 +63,30 @@ struct PracticeResultView: View {
                     stat("Wrong", "\(result.wrong)")
                 }
                 .padding(.vertical, 4)
-                HStack(spacing: 16) {
-                    Button(action: onAgain) {
-                        Label("Practice Again", systemImage: "arrow.counterclockwise").frame(minWidth: 150)
+                if let pathNote {
+                    Label(pathNote.text, systemImage: pathNote.good ? "figure.walk" : "info.circle")
+                        .font(.headline)
+                        .foregroundStyle(pathNote.good ? Color.green : Color.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                // With a next path step, it gets its own full-width row: three large buttons don't fit side by side.
+                VStack(spacing: 12) {
+                    if let onNextStep {
+                        Button(action: onNextStep) {
+                            Label("Next Step", systemImage: "arrow.right").frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.green)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(color)
-                    Button(action: onClose) { Text("Close").frame(minWidth: 80) }
-                        .buttonStyle(.bordered)
+                    HStack(spacing: 16) {
+                        Button(action: onAgain) {
+                            Label("Practice Again", systemImage: "arrow.counterclockwise").frame(minWidth: 150)
+                        }
+                        .buttonStyle(onNextStep == nil ? AnyPrimitiveButtonStyle(.borderedProminent) : AnyPrimitiveButtonStyle(.bordered))
+                        .tint(color)
+                        Button(action: onClose) { Text("Close").frame(minWidth: 80) }
+                            .buttonStyle(.bordered)
+                    }
                 }
                 .controlSize(.large)
             }
@@ -89,4 +109,11 @@ struct PracticeResultView: View {
             Text(label).font(.caption).foregroundStyle(.secondary)
         }
     }
+}
+
+/// Lets the result card pick a button style at run time (prominent unless "Next Step" is the main action).
+struct AnyPrimitiveButtonStyle: PrimitiveButtonStyle {
+    private let make: (Configuration) -> AnyView
+    init<S: PrimitiveButtonStyle>(_ style: S) { make = { AnyView(style.makeBody(configuration: $0)) } }
+    func makeBody(configuration: Configuration) -> some View { make(configuration) }
 }
