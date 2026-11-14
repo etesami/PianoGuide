@@ -30,7 +30,7 @@ public struct GuidedPath: Identifiable, Sendable {
     }
 
     /// The paths the app offers.
-    public static let all: [GuidedPath] = [TwoHandsPath.path]
+    public static let all: [GuidedPath] = [TwoHandsPath.path, GreensleevesPath.path]
 }
 
 public struct PathLesson: Identifiable, Sendable {

@@ -16,6 +16,7 @@ import SwiftUI
 /// not judged meanwhile, and the song stays where it was.
 struct PracticeView: View {
     @EnvironmentObject private var midi: MIDIInputService
+    @EnvironmentObject private var bluetooth: BluetoothPiano
     @StateObject private var library = SongLibrary()
     @State private var song: Song?
     @State private var songEntry: SongLibrary.Entry?
@@ -172,8 +173,11 @@ struct PracticeView: View {
                     Button { pauseAll(); showPairing = true } label: { Label("Bluetooth MIDI", systemImage: "dot.radiowaves.left.and.right") }
                 }
             }
-            .sheet(isPresented: $showPairing, onDismiss: midi.connectAllSources) {
-                BluetoothMIDIPairingView()
+            .sheet(isPresented: $showPairing, onDismiss: {
+                midi.connectAllSources()
+                bluetooth.stopScanning()
+            }) {
+                BluetoothMIDIPairingView(bluetooth: bluetooth).environmentObject(midi)
             }
             .sheet(isPresented: $showLibrary, onDismiss: {
                 if notePending, note != nil { showNote = true }
@@ -240,8 +244,8 @@ struct PracticeView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(midi.sourceNames.isEmpty ? "No MIDI keyboard connected. Tap the Bluetooth button, or use the keys below."
-                                          : "Connected: " + midi.sourceNames.joined(separator: ", "))
+            Text(midi.connectedNames.isEmpty ? "No MIDI keyboard connected. Tap the Bluetooth button, or use the keys below."
+                                             : "Connected: " + midi.connectedNames.joined(separator: ", "))
                 .font(.subheadline).foregroundColor(.secondary)
             if let loadError = loadError { Text(loadError).foregroundColor(.red) }
             if let drill {

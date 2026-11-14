@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-11-06 (session 30: guided paths, "Two Hands Together" on Ghoghaye Setaregan)
+Last updated: 2026-11-14 (session 32: second guided path, "Greensleeves: Moving Hand")
 
 ## Where we are
 
@@ -307,7 +307,7 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   Positions C G F, Reading on your own); right hand 13 of 25; both hands unchanged at 7 of 27. 7 more tests (62 pass). Seen in the
   iPad simulator on Hands 4 (both: none; left: A B A C). **Not verified:** landscape, a long real piece.
 
-**Not yet verified:** running on the real iPad; in-app Bluetooth pairing; the Songs sheet and import picker by hand.
+**Not yet verified:** in-app Bluetooth connection on the iPad (session 31); the Songs sheet and import picker by hand.
 
 - **README with screenshots** (session 28): `README.md` rewritten, images in `docs/screenshots/` (iPad Pro 11-inch simulator, Ode to Joy).
   How they were taken is in [DEVELOPMENT.md](DEVELOPMENT.md#retake-the-readme-screenshots); retake them when the screens change.
@@ -360,7 +360,52 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   wider than the 460 pt card. Next Step now has its own full-width row, with Practice Again (no longer prominent) and Close below it;
   without a next step the row is as before. Seen in the simulator (landscape) with a temporary hook (removed).
 
+- **Bluetooth MIDI: the app's own connection** (session 31, user's request: "enable bluetooth connection, make it ready"; then on the
+  iPad the FP-30X never showed in Apple's pairing screen, though nothing else was connected and it was forgotten in iPad Settings).
+  The Bluetooth sheet (`BluetoothMIDIPairingView`) is now the app's own list (`BluetoothPiano`, CoreBluetooth, iPad only): it scans for
+  **all** nearby Bluetooth devices and lists MIDI ones first (advertising the BLE MIDI service, or already connected to the iPad, which
+  don't advertise), then "Other Bluetooth devices nearby" (so we can see what the iPad finds, e.g. "FP-30X Audio"). Tapping one connects,
+  checks it has the MIDI service, subscribes to the MIDI characteristic and **reads the notes itself** (`BLEMIDIParser`: timestamps,
+  running status, sysex and real-time skipped, the app's own channels 2/10 ignored), passing them to `MIDIInputService.receiveBluetooth`.
+  If iPadOS also makes the piano a CoreMIDI source, the CoreMIDI notes win (Bluetooth notes are ignored while any CoreMIDI keyboard
+  is connected), so nothing counts twice. The piano is remembered and reconnected at launch and whenever it comes back on ("Reconnects
+  by itself", **Forget**). Shows red lines for Bluetooth off / permission denied. Apple's screen is still a button in the sheet (in its own
+  UIKit navigation controller; inside a SwiftUI NavigationStack its Connect step can fail). `MIDIInputService` also hides "Network…"/"IAC…"
+  ports and releases held keys when a keyboard disappears. Builds for iPad device and Mac Catalyst; the parser checked on sample packets
+  with a throwaway script. **Found with the user:** the piano was invisible everywhere (app, Apple's screen, a Mac BLE scan) because
+  another iPad (Simply Piano) kept it connected; with that iPad's Bluetooth off, a Mac scan saw "FP-30X MIDI" with the BLE MIDI service.
+  **Not verified:** connecting and playing through PianoGuide on the iPad (the user was about to try at the end of the session). **Known gap:** with the piano connected only this way
+  (no CoreMIDI destination), the app's own sound (Listen, Play Along, clicks) plays through the iPad, not the piano.
+  User note: the FP-30X **pairing mode** is for Bluetooth audio (piano as a speaker); MIDI only needs Bluetooth on.
+
+- **Second guided path: "Greensleeves: Moving Hand"** (session 32, user's request: the same step-by-step setup for another of their
+  songs; they picked Greensleeves from `My Drive/z-tmp/Piano/songs`). Same recipe as Two Hands Together (PLAN.md §10), but aimed at a
+  different problem: in this piece the hands fit easily (the left hand is one open-fifth shape, low note with 5 held two beats, fifth with
+  1 on beat 3, moving between A, C, G, E); the work is the **right hand changing position ~8 times** (thumb A → G in bar 5, E → A in
+  bar 9, the leap up to G5 with 5 in bars 17 and 25, F♯ with the thumb in bar 15) under a **dotted "lilt"**. Core:
+  `GreensleevesPieces.swift` (notes and fingers read bar by bar from the user's `Greensleeves (simple).mid` with the app's parser; 3/4,
+  72 BPM, 31 bars with a one-note pickup; sections: phrase 1 = bars 1–9, ending on a held E without the next pickup; verse 1–16;
+  refrain 16–31, starting on the long A before the leap; whole 1–31; right hand as melody or **even** (dotted quarter + eighth → two
+  quarters, same notes), left hand as full or one held low note per bar), `GreensleevesPath.swift` (content), added to `GuidedPath.all`
+  (the Paths sheet now shows a list of the two paths, existing code). **9 lessons, 33 steps:** 1 Meet the song (listen to the whole
+  song, each hand alone) · 2 Left hand on autopilot (timed 60/80/100%) · 3 Right-hand notes and moves, even rhythm (wait, timed 70%) ·
+  4 Add the lilt (wait, play along 70/90%) · 5 Meet on beat one (left hand low notes) · 6 Add the fifth on 3 · 7 The whole verse (up to
+  100%) · 8 The refrain: the leap (right hand alone, left hand alone, low notes, full) · 9 The whole song up to 100%. Tests: 3 new piece
+  tests, the content test now checks every path (76 pass). Seen in the iPad Pro 11" simulator with a temporary hook (removed): the Paths
+  list, steps 3.1 (even), 4.1 (dotted), 8.1 (refrain), and 8.1 in landscape. **Not verified:** playing it, the path's detail page by hand,
+  the real piano. The staff doesn't draw dots, so a dotted quarter looks like a quarter (the eighth after it shows the rhythm).
+
 ## Next steps (in order)
+
+0. User to **connect the FP-30X to PianoGuide on the iPad over Bluetooth** (Bluetooth button → "FP-30X MIDI" → green check → Done;
+   other iPads' Bluetooth off). Check: keys light up the on-screen keys, wait mode advances, it reconnects after turning the piano off
+   and on, and after relaunching the app. If it connects but notes don't arrive, check whether iPadOS also made a CoreMIDI source
+   (then the header shows the plain name, without "(Bluetooth)"). Next, if wanted: send the app's sound (Listen, Play Along, clicks)
+   to the piano over the Bluetooth connection too (write to the BLE MIDI characteristic), since without a CoreMIDI destination it plays on the iPad.
+
+0. User to try **Greensleeves: Moving Hand** (Paths → the second path). Open questions: is the even-rhythm lesson useful, or skip it?
+   Does the refrain's leap (bars 16–17, 24–25) need its own short drill before the whole refrain? Next path: another song from the
+   Drive folder (Gole Gandom, Golden Dreams, Jan e Maryam, Jingle Bells) or the Setaregan chorus.
 
 0. User to try the **Two Hands Together** path (Paths button) on the real piano. Open questions: is the step size right, or does
    some step need an easier one before it? Is "2 good runs in a row" at ≤ 10% mistakes too strict or too loose? Should the path
@@ -422,10 +467,9 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
    clock to glide between steps, and no scoring while the clock runs freely (that is milestone 5).
 5. Later: switch the app target to Swift 6 (`SWIFT_VERSION` in `project.yml`; core types are already `Sendable`).
 
-**On hold (user's call, 2026-10-06): real-iPad testing.** Don't ask about or plan around it until the user brings it back.
-Test in the simulator (on-screen keys) and the Mac Catalyst build (real piano) instead. When it resumes (the Apple ID
-and team are already set up): connect the iPad, turn on Developer Mode, install from Xcode
-([DEVELOPMENT.md](DEVELOPMENT.md#install-on-ipad)), and pair the FP-30X with the in-app Bluetooth button.
+**Real-iPad testing resumed (session 31, the user brought it back):** the user installs on the iPad and tries Bluetooth there
+([DEVELOPMENT.md](DEVELOPMENT.md#install-on-ipad), [connect the FP-30X](DEVELOPMENT.md#connect-the-roland-fp-30x)).
+The simulator (on-screen keys) and the Mac Catalyst build (real piano over USB) are still the way to test from the command line.
 
 ## Decisions log
 
@@ -454,6 +498,7 @@ and team are already set up): connect the iPad, turn on Developer Mode, install 
 | 2026-10-09 | Result card at the end of a song: green if mistakes ≤ 10% of the notes, orange if more; the Difficult mark uses the same rule (was a fixed 5). |
 | 2026-10-09 | Lesson notes are Markdown files next to each song (`x.md` for `x.mid`, same level folder), shown after picking the song; closable and scrollable. |
 | 2026-10-06 | Song library: imported `.mid` files are **copied** into the app (Documents/Songs), so they stay if the original moves; the file name is the song title; the last song opens on launch. No database: the folder is the library. |
+| 2026-11-14 | Bluetooth MIDI on the iPad uses the app's own CoreBluetooth connection and reads the notes itself (BLE MIDI parser), with Apple's pairing screen kept as a second way; the piano is remembered and reconnected. Bluetooth "Audio" can't carry key presses and isn't used. |
 | 2026-11-01 | Notes mode weighting: misses are kept per staff and pitch across songs (not per song); weight = 1 + 5 x recent miss rate, and the boosts together may not exceed the base weights, so every note keeps at least half its even share. Values chosen by Claude from simulation; the user has not tried them yet. |
 
 ## Known issues / caveats
@@ -474,6 +519,9 @@ and team are already set up): connect the iPad, turn on Developer Mode, install 
 - On-screen keys **latch chord notes** (a clicked chord key stays held until the chord is complete), because a mouse can
   only hold one key. Added 2026-10-06 after the simulator got stuck on step 1 (C3+C4). Not yet confirmed by the user.
 - The FP-30X should be paired through the **in-app** Bluetooth screen, not iOS Settings → Bluetooth.
+- **The FP-30X serves one Bluetooth MIDI device at a time and stops advertising while connected** (session 31): another iPad
+  that had used it with Simply Piano kept reconnecting to it, so it showed nowhere (not in the app, not in a Mac BLE scan). Turning
+  off that iPad's Bluetooth made "FP-30X MIDI" appear at once. "FP-30X Audio" is the piano's Bluetooth speaker connection, not MIDI.
 - Closures stored on objects (like `midi.onEvent`) capture a copy of the view: they see `@State` changes but **not**
   later `@AppStorage` values. Re-create such a closure when the setting changes (see `installMIDIHandler`), or read state
   that lives in an object. (Session 17 bug.)

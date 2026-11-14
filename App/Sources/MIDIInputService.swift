@@ -2,7 +2,8 @@ import CoreMIDI
 import Foundation
 
 /// Listens to every connected MIDI source (Bluetooth, USB, network) and publishes note events.
-/// Bluetooth devices show up here once paired via `BluetoothMIDIPairingView`.
+/// Bluetooth devices show up here once paired via Apple's screen; a piano connected by `BluetoothPiano` sends its notes
+/// through `receiveBluetooth` instead.
 final class MIDIInputService: ObservableObject {
     enum Event {
         case noteOn(pitch: UInt8, velocity: UInt8)
@@ -10,6 +11,14 @@ final class MIDIInputService: ObservableObject {
     }
 
     @Published private(set) var sourceNames: [String] = []
+    /// The piano connected by `BluetoothPiano` (notes read over Bluetooth by the app itself), if any.
+    @Published private(set) var bluetoothSource: String?
+
+    /// Every keyboard the app hears: CoreMIDI sources, or else the Bluetooth piano.
+    var connectedNames: [String] {
+        if sourceNames.isEmpty, let bluetoothSource { return [bluetoothSource + " (Bluetooth)"] }
+        return sourceNames
+    }
     @Published private(set) var pressed: Set<UInt8> = []
     @Published private(set) var lastError: String?
 
@@ -18,6 +27,7 @@ final class MIDIInputService: ObservableObject {
 
     private var client = MIDIClientRef()
     private var inputPort = MIDIPortRef()
+    private var sourceIDs: Set<MIDIUniqueID> = []
 
     init() {
         let status = MIDIClientCreateWithBlock("PianoGuide" as CFString, &client) { [weak self] notification in
@@ -35,14 +45,43 @@ final class MIDIInputService: ObservableObject {
         connectAllSources()
     }
 
+    /// Connects every MIDI source. Called at start, whenever the MIDI setup changes (a Bluetooth or USB keyboard comes
+    /// or goes), and when the Bluetooth sheet closes.
     func connectAllSources() {
         var names: [String] = []
+        var ids: Set<MIDIUniqueID> = []
         for i in 0..<MIDIGetNumberOfSources() {
             let source = MIDIGetSource(i)
             MIDIPortConnectSource(inputPort, source, nil)   // reconnecting an existing source is harmless
-            names.append(Self.name(of: source))
+            var id: MIDIUniqueID = 0
+            MIDIObjectGetIntegerProperty(source, kMIDIPropertyUniqueID, &id)
+            ids.insert(id)
+            let name = Self.name(of: source)
+            // The always-present "Network Session" and Mac "IAC Driver" ports are not keyboards.
+            if !name.hasPrefix("Network"), !name.hasPrefix("IAC") { names.append(name) }
         }
+        // A keyboard went away (turned off, out of Bluetooth range, unplugged): its held keys will never send a
+        // note-off, so release them here, or wait mode would think they are still held.
+        if !sourceIDs.isSubset(of: ids) {
+            for pitch in pressed { deliver(.noteOff(pitch: pitch)) }
+        }
+        sourceIDs = ids
         sourceNames = names
+    }
+
+    /// Notes read over Bluetooth by `BluetoothPiano` (main thread). Ignored while a CoreMIDI keyboard is connected:
+    /// if iPadOS also made the Bluetooth piano a CoreMIDI source, each note would otherwise count twice.
+    func receiveBluetooth(_ events: [Event]) {
+        guard sourceNames.isEmpty else { return }
+        events.forEach(deliver)
+    }
+
+    /// The Bluetooth piano came or went. When it goes, its held keys are released (no note-off will come).
+    func setBluetoothSource(_ name: String?) {
+        if name == nil, bluetoothSource != nil, sourceNames.isEmpty {
+            for pitch in pressed { deliver(.noteOff(pitch: pitch)) }
+        }
+        bluetoothSource = name
     }
 
     /// Lets the on-screen keyboard behave exactly like a real one.

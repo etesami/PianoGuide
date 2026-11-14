@@ -65,12 +65,85 @@ final class SetaregaanPieceTests: XCTestCase {
     }
 }
 
+final class GreensleevesPieceTests: XCTestCase {
+    typealias Piece = GreensleevesPiece
+
+    func testSectionsAreWholeBarsOf3_4WithFingers() {
+        for section in Piece.Section.allCases {
+            for right in [Piece.Right.melody, .even] {
+                for left in [Piece.Left.root, .full] {
+                    let song = Piece.song(section, right: right, left: left)
+                    let name = song.title
+                    XCTAssertEqual(song.timeSignatures.first?.numerator, 3, name)
+                    XCTAssertEqual(song.tempoMap[0].bpm, 72, accuracy: 0.01, name)
+                    XCTAssertTrue(song.notes.allSatisfy { $0.finger != nil }, name)
+                    XCTAssertEqual(song.notes.map(\.id), Array(song.notes.indices), name)
+                    XCTAssertEqual(song.barStartBeats.count, section.barCount, name)
+                    for note in song.notes {
+                        let barEnd = (floor(note.startBeat / 3) + 1) * 3
+                        XCTAssertLessThanOrEqual(note.startBeat + note.durationBeats, barEnd + 1e-9, name)
+                    }
+                    if right == .even {
+                        let offsets = song.notes.filter { $0.hand == .right }.map { $0.startBeat.truncatingRemainder(dividingBy: 1) }
+                        XCTAssertTrue(offsets.allSatisfy { $0 == 0 }, "every note on a beat: \(name)")
+                    }
+                }
+            }
+        }
+    }
+
+    /// The whole song matches the user's file (bar by bar, from `Greensleeves (simple).mid`).
+    func testWholeSongMatchesTheFile() {
+        let song = Piece.song(.whole)
+        let right = song.notes.filter { $0.hand == .right }
+        let left = song.notes.filter { $0.hand == .left }
+        XCTAssertEqual(right.count, 70)
+        XCTAssertEqual(left.count, 60)
+        XCTAssertEqual(right.prefix(9).map { NoteName.of($0.pitch) },
+                       ["A4", "C5", "D5", "E5", "F5", "E5", "D5", "B4", "G4"])
+        XCTAssertEqual(right.prefix(9).map(\.finger), [1, 2, 3, 4, 5, 4, 3, 2, 1])
+        XCTAssertEqual(right[0].startBeat, 2, "pickup on beat 3")
+        XCTAssertEqual(right[4].startBeat, 7.5, "the short note on \"and\" of 2 in bar 3")
+        // Bar 17: the leap to G5 with finger 5.
+        let bar17 = right.first { $0.startBeat == 48 }!
+        XCTAssertEqual(NoteName.of(bar17.pitch), "G5")
+        XCTAssertEqual(bar17.finger, 5)
+        XCTAssertEqual(left.prefix(4).map { NoteName.of($0.pitch) }, ["A2", "E3", "C3", "G3"])
+        XCTAssertEqual(left.prefix(2).map(\.startBeat), [3, 5])
+        XCTAssertEqual(left.suffix(2).map(\.startBeat), [90, 90], "last bar: the fifth held together")
+    }
+
+    func testEasierVersions() {
+        let first = Piece.song(.first)
+        let lastRight = first.notes.filter { $0.hand == .right }.last!
+        XCTAssertEqual(NoteName.of(lastRight.pitch), "E4", "phrase 1 ends on E, without the next pickup")
+        XCTAssertEqual(lastRight.durationBeats, 3 * 0.95, accuracy: 1e-9)
+        XCTAssertEqual(Piece.song(.first, right: .even).notes.filter { $0.hand == .right }.count,
+                       first.notes.filter { $0.hand == .right }.count, "same notes, other rhythm")
+        let roots = Piece.song(.refrain, left: .root).notes.filter { $0.hand == .left }
+        XCTAssertEqual(roots.count, 16, "one low note per bar")
+        XCTAssertTrue(roots.allSatisfy { $0.finger == 5 })
+        let parsed = try! MIDIFileParser.parse(MIDIFileWriter.write(Piece.song(.whole)))
+        XCTAssertEqual(parsed.notes.map(\.pitch), Piece.song(.whole).notes.map(\.pitch))
+        XCTAssertEqual(parsed.notes.map(\.finger), Piece.song(.whole).notes.map(\.finger))
+    }
+}
+
 final class GuidedPathTests: XCTestCase {
     let path = TwoHandsPath.path
 
     func testPathContent() {
         XCTAssertEqual(path.lessons.count, 10)
-        XCTAssertEqual(path.lessons.map(\.number), Array(1...10))
+        XCTAssertEqual(GreensleevesPath.path.lessons.count, 9)
+        XCTAssertEqual(Set(GuidedPath.all.map(\.id)).count, GuidedPath.all.count, "unique path ids")
+        for path in GuidedPath.all { check(path) }
+        XCTAssertEqual(path.step(after: path.steps[2])?.id, "2.1")
+        XCTAssertNil(path.step(after: path.steps.last!))
+        XCTAssertEqual(path.lesson(of: path.steps[3])?.number, 2)
+    }
+
+    private func check(_ path: GuidedPath) {
+        XCTAssertEqual(path.lessons.map(\.number), Array(1...path.lessons.count))
         let ids = path.steps.map(\.id)
         XCTAssertEqual(Set(ids).count, ids.count, "unique step ids")
         for lesson in path.lessons {
@@ -93,9 +166,6 @@ final class GuidedPathTests: XCTestCase {
                 last[key] = step.speed
             }
         }
-        XCTAssertEqual(path.step(after: path.steps[2])?.id, "2.1")
-        XCTAssertNil(path.step(after: path.steps.last!))
-        XCTAssertEqual(path.lesson(of: path.steps[3])?.number, 2)
     }
 
     private func run(_ step: PathStep, mistakes: Int = 0, speed: Double? = nil, hand: Clef?? = nil) -> PathStep.Run {

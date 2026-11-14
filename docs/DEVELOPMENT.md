@@ -110,9 +110,12 @@ once (steps 1 and 4 above); after that it also works over Wi-Fi.
 
 ## Connect the Roland FP-30X
 
-1. Turn on the piano's Bluetooth. Press the button to switch to MIDI mode if needed; see the FP-30X manual for "Bluetooth MIDI".
-2. In PianoGuide, tap the **Bluetooth** toolbar button → choose the FP-30X → **Connect**. Don't pair it in iOS Settings.
-3. Close the sheet. The header should show "Connected: …", and pressing piano keys lights up the on-screen keys.
+1. Turn on the piano's Bluetooth. MIDI needs no pairing mode (pairing mode is for Bluetooth audio). Don't pair it in iOS Settings;
+   if it is there, Forget it.
+2. In PianoGuide, tap the **Bluetooth** toolbar button. The app lists nearby Bluetooth devices, MIDI ones first; tap **FP-30X MIDI**.
+3. A green check shows when it is connected; tap **Done**. The header shows "Connected: … (Bluetooth)", and piano keys light up the on-screen keys.
+4. The app remembers it and reconnects by itself when the app is open and the piano is on. **Forget** in the sheet stops that.
+   Apple's own pairing screen is still there as a button at the bottom of the sheet.
 
 ## Code map
 
@@ -136,7 +139,8 @@ once (steps 1 and 4 above); after that it also works over Wi-Fi.
 | `App/Sources/PracticeResultView.swift` | Card shown when a song ends: green (passed) or orange (needs practice), Practice Again / Close |
 | `App/Sources/PracticeNoteView.swift` | Sheet showing a lesson note (scrolls; "Start Practice" closes it) |
 | `App/Sources/MIDIInputService.swift` | CoreMIDI: connects all sources and publishes note on/off (also simulated events) |
-| `App/Sources/BluetoothMIDIPairingView.swift` | Wraps `CABTMIDICentralViewController` |
+| `App/Sources/BluetoothMIDIPairingView.swift` | Bluetooth sheet: nearby devices (MIDI first), tap to connect, remembered piano (Forget); button for Apple's `CABTMIDICentralViewController` |
+| `App/Sources/BluetoothPiano.swift` | iPad only: CoreBluetooth scan/connect, reads BLE MIDI notes itself (`BLEMIDIParser`), remembers the piano (UserDefaults `bluetoothPianoID`/`Name`) and reconnects it |
 | `App/Sources/PracticeView.swift` | Main screen: wait mode on the chosen song (staff + keyboard); remembers the last song |
 | `App/Sources/SongLibrary.swift` | Bundled samples (subfolders = categories) + imported `.mid` files (copied to Documents/Songs); import, delete, load; each song's `SongProgress` (UserDefaults `songProgress`) |
 | `App/Sources/SongLibraryView.swift` | "Songs" sheet: category folders, pick a song, swipe to delete, Import button (`fileImporter`); completed (green check) and difficult (orange) marks; user marks (swipe right / long-press, "Marked" section); `SongMarkPicker` (also used by the flag button in `PracticeView`) |
