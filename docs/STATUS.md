@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-11-16 (session 33: "Setaregan: Second Half" path; Setaregan notes moved out of the repo into an imported file; Steps sheet fix)
+Last updated: 2026-11-16 (session 33: "Setaregan: Second Half" path; paths from imported plan + song files; Steps sheet fix)
 
 ## Where we are
 
@@ -413,28 +413,36 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   (wait, 70/90%) · 11 Bars 61–116 joined (wait, 65/80%) · 12 The whole song (wait, 75/90/100%). 2 new tests (78 pass); iOS simulator
   and Catalyst build. **Not verified:** playing it. The staff has no ties: a tied note shows as one long (whole) note.
 
-- **Paths built from an imported song file** (session 33, user's request: keep Ghoghaye Setaregan, which is under copyright, out
-  of the public repo and import it by hand; made general). Core: `PathSongFile` (id, song name, hint, a check that says why a file
-  doesn't fit) and `PathEntry` (a built-in path, or one built from a song file) in `GuidedPath.swift`; `GuidedPath.entries`
-  replaces `GuidedPath.all`. `SetaregaanPiece` **no longer holds any notes**: `song(_:from:left:right:)` cuts score bars out of
-  the imported song and makes the easier versions from it (low notes = the lowest downbeat note held a bar, low note + chord =
-  downbeat + the beat-2 notes held through 3, long notes = the first note of each bar held). Check: 3/4, both hands, 116 bars.
-  Both Setaregan paths (`TwoHandsPath.entry`, `SetaregaanSecondHalfPath.entry`) share the file `ghoghaye-setaregan`.
-  App: `PathStore` keeps the copy in Application Support/PathSongs/<id>.mid, loads it at launch, builds each path once per import.
-  The Paths list shows "Needs your song file: Ghoghaye Setaregan" (orange); the path opens on an import screen (what to import,
-  **Import Song File…**, the reason if the file is wrong). A path's ⋯ menu has **Replace Song File…** and **Remove Song File…**
-  (progress kept). Before deleting the notes, every piece the paths use was compared with the file-built one from the user's
-  `.mid`: the same (up to 0.001-beat rounding); the long-notes right hand no longer stretches over ties (no path uses it there).
-  Tests use a made-up song of the same shape (`FakeSetaregaan`), 78 pass. Seen in the iPad simulator (temporary hook, removed, and
-  mouse taps): the list without the file, the import screen, a wrong file (Twinkle) refused with "It isn't in 3/4 time", the real
-  file imported, both paths open after relaunch, step 1.1 loaded from it. **Not verified:** the Files picker itself by hand.
-  **The verse notes are still in git history** (commit `0da17a0`, public repo): needs the repo made private or history rewritten.
+- **Paths from plan files** (session 33, user's request: keep Ghoghaye Setaregan, which is under copyright, out of the public
+  repo; then: new practices without changing the app). A path can be a **plan file** (`.md`, format in `PathPlans/README.md`):
+  title, id, song file name, time, bars, summary, `## Parts` (name: first-last bar), `## Lesson:` with `goal:`/`tip:`, and `###`
+  steps with `piece:`, optional `left:` (low notes, low note + chord) / `right:` (long notes), `play:` (listen N% / wait hand /
+  timed hand N% / play along hand N%), `runs:` and the instruction. The player imports the plan and the song's `.mid` in the Paths
+  sheet (**Import Files…**, several at once); the path shows once both are in, and the pieces are cut from the song by bars.
+  Core: `PathPlan.swift` (parser with line-numbered errors, song check: time, both hands, bar count; builds the `GuidedPath`),
+  `PathPiece.swift` (cut by bars + the easier versions, from any song). `GuidedPath.builtIn` = Greensleeves (public domain, stays
+  in code). Removed: `SetaregaanPieces.swift`, `TwoHandsPath.swift`, `SetaregaanSecondHalfPath.swift` and the song-file types
+  from earlier in the session. The two Setaregan paths are now `PathPlans/Two Hands Together.md` and
+  `PathPlans/Setaregan Second Half.md`, exported from the old code: built from the user's `.mid`, all 87 steps are identical to
+  the old code's (every field and note; checked with a throwaway script). Piece titles are now shorter ("Setaregan · Section 1 ·
+  low notes"). App: `PathStore` keeps plans in Application Support/PathPlans/<id>.md and songs in PathSongs/<the plan's file name>;
+  a song is matched to the plan naming its file, else to a waiting plan it fits; plans waiting for their song are listed in
+  orange; a path's ⋯ menu has **Remove Path…** (progress kept). Tests: every plan in `PathPlans/` is parsed and built from a
+  made-up song (`FakeWaltz`), plus parser errors; 81 pass. Seen in the iPad simulator (temporary hook calling the real import,
+  removed, and mouse taps): plan alone → "Needs its song file", Twinkle refused, second plan + the real song under another name
+  → both paths open, step 1.1 of the second half loaded (90 bars). **Not verified:** the Files picker by hand, `.md` files
+  being selectable in the iPad's picker.
+  **History rewritten** (2026-11-16): the old notes file in `0da17a0`, `c59f5a4`, `29a9a8f` was replaced by a one-line placeholder,
+  only those commits and the next one were rebuilt (now `5a93a67`, `389d9a9`, `b64f3d3`, `bd1bf4b`; same authors, dates, messages;
+  older commits and the signed PR merges untouched) and force-pushed. Backup of the old history: `../PianoGuide-backup.git`.
+  GitHub may still show the old commit by its direct link until it cleans up; GitHub Support can purge it.
   The file to import: `My Drive/z-tmp/Piano/songs/Ghoghaye Setaregan.mid` (made by `ghoghaye_setaregan.py`).
 
 ## Next steps (in order)
 
-0. User to **import `Ghoghaye Setaregan.mid`** on the iPad (Paths → either Setaregan path → Import Song File…), and decide about the
-   verse notes still in the public git history (make the repo private, or rewrite history).
+0. User to **import the Setaregan paths** on the iPad: Paths → Import Files… → pick `Ghoghaye Setaregan.mid` and the two plan
+   files from `PathPlans/` (copy them next to the `.mid` in Google Drive first). Optional: ask GitHub
+   Support to purge the old commit `0da17a0` from its cache; then the backup `../PianoGuide-backup.git` can be deleted.
 0. User to try **Setaregan: Second Half** (Paths → second path) and the **Steps sheet fix**. Open questions: are the 8–14-bar parts
    the right size, or should the climb / high part be split? Is two runs in a row of the whole song (3½ min) too much?
 

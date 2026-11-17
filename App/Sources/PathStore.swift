@@ -2,74 +2,129 @@ import Foundation
 import PianoCore
 
 /// Keeps the player's `PathProgress` for every guided path, saved in UserDefaults ("pathProgress", JSON keyed by path id),
-/// and the song files that some paths are built from (imported by the player, copied to Application Support/PathSongs/<id>.mid).
+/// and the paths the player imported: plan files (`PathPlan`, Application Support/PathPlans/<id>.md) and the song files they
+/// are built from (Application Support/PathSongs/<file name from the plan>). An imported path shows once both are in place.
 final class PathStore: ObservableObject {
     @Published private(set) var progress: [String: PathProgress] = [:]
-    /// Imported path songs, by `PathSongFile.id`.
+    /// Imported plans, by title.
+    @Published private(set) var plans: [PathPlan] = []
+    /// Imported songs, by the file name the plans use.
     @Published private(set) var songs: [String: Song] = [:]
-    /// Paths built from their song, by entry id (built once per import, so step ids and songs stay the same).
+    /// Paths built from a plan and its song, by plan id (built once per import, so step ids and songs stay the same).
     private var built: [String: GuidedPath] = [:]
     private static let defaultsKey = "pathProgress"
 
-    private static var songFolder: URL {
-        URL.applicationSupportDirectory.appending(path: "PathSongs", directoryHint: .isDirectory)
-    }
+    private static let planFolder = URL.applicationSupportDirectory.appending(path: "PathPlans", directoryHint: .isDirectory)
+    private static let songFolder = URL.applicationSupportDirectory.appending(path: "PathSongs", directoryHint: .isDirectory)
 
     init() {
         if let data = UserDefaults.standard.data(forKey: Self.defaultsKey) {
             progress = (try? JSONDecoder().decode([String: PathProgress].self, from: data)) ?? [:]
         }
-        for entry in GuidedPath.entries {
-            guard let file = entry.songFile, songs[file.id] == nil,
-                  let data = try? Data(contentsOf: Self.url(of: file)),
-                  let song = try? MIDIFileParser.parse(data) else { continue }
-            songs[file.id] = song
+        let fm = FileManager.default
+        for url in (try? fm.contentsOfDirectory(at: Self.planFolder, includingPropertiesForKeys: nil)) ?? [] {
+            if let text = try? String(contentsOf: url, encoding: .utf8), let plan = try? PathPlan(text: text) { plans.append(plan) }
         }
-    }
-
-    // MARK: Song files
-
-    private static func url(of file: PathSongFile) -> URL { songFolder.appending(path: file.id + ".mid") }
-
-    /// The path for `entry`, or nil while the song file it needs hasn't been imported.
-    func path(for entry: PathEntry) -> GuidedPath? {
-        if let path = built[entry.id] { return path }
-        let path = entry.path(with: entry.songFile.flatMap { songs[$0.id] })
-        built[entry.id] = path
-        return path
-    }
-
-    enum ImportError: LocalizedError {
-        case wrongSong(String, reason: String)
-        var errorDescription: String? {
-            switch self {
-            case .wrongSong(let name, let reason): return "This doesn't look like the right file for \(name). \(reason)"
+        plans.sort { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        for url in (try? fm.contentsOfDirectory(at: Self.songFolder, includingPropertiesForKeys: nil)) ?? [] {
+            if let data = try? Data(contentsOf: url), let song = try? MIDIFileParser.parse(data) {
+                songs[url.lastPathComponent] = song
             }
         }
     }
 
-    /// Checks `source` and keeps a copy for every path that uses `file`. Replaces an earlier import; progress is kept.
-    func importSong(from source: URL, for file: PathSongFile) throws {
-        let accessing = source.startAccessingSecurityScopedResource()
-        defer { if accessing { source.stopAccessingSecurityScopedResource() } }
-        let data = try Data(contentsOf: source)
+    // MARK: Paths
+
+    /// The paths to show: the built-in ones, then each imported plan whose song is in place.
+    var paths: [GuidedPath] { GuidedPath.builtIn + plans.compactMap(path(for:)) }
+
+    /// Imported plans still waiting for their song file.
+    var plansNeedingSong: [PathPlan] { plans.filter { path(for: $0) == nil } }
+
+    func isImported(_ path: GuidedPath) -> Bool { plans.contains { $0.id == path.id } }
+
+    private func path(for plan: PathPlan) -> GuidedPath? {
+        if let path = built[plan.id] { return path }
+        guard let song = songs[plan.fileName], plan.problem(with: song) == nil else { return nil }
+        let path = plan.path(with: song)
+        built[plan.id] = path
+        return path
+    }
+
+    // MARK: Importing
+
+    /// Imports plan files (.md, .txt) and song files (.mid). Plans go first, so a plan and its song can come in one go.
+    /// A song is kept under the name its plan uses: the plan naming the file, else a plan still waiting for a song that it
+    /// fits. Returns one line per file: what happened, and whether it went well.
+    func importFiles(_ urls: [URL]) -> [(text: String, good: Bool)] {
+        let isSong = { (url: URL) in ["mid", "midi"].contains(url.pathExtension.lowercased()) }
+        var report: [(String, Bool)] = []
+        for url in urls.filter({ !isSong($0) }) + urls.filter(isSong) {
+            let name = url.lastPathComponent
+            do {
+                let data = try read(url)
+                report.append(isSong(url) ? try importSong(data, name: name) : try importPlan(data, name: name))
+            } catch let error as PathPlan.ParseError {
+                report.append(("\(name): \(error.errorDescription ?? "")", false))
+            } catch {
+                report.append(("\(name): " + SongLibraryView.describe(error), false))
+            }
+        }
+        return report
+    }
+
+    private func read(_ url: URL) throws -> Data {
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+        return try Data(contentsOf: url)
+    }
+
+    private func importPlan(_ data: Data, name: String) throws -> (String, Bool) {
+        let plan = try PathPlan(text: String(decoding: data, as: UTF8.self))
+        try FileManager.default.createDirectory(at: Self.planFolder, withIntermediateDirectories: true)
+        try data.write(to: Self.planFolder.appending(path: plan.id + ".md"), options: .atomic)
+        let replaced = plans.contains { $0.id == plan.id }
+        plans.removeAll { $0.id == plan.id }
+        plans.append(plan)
+        plans.sort { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        built[plan.id] = nil
+        if path(for: plan) != nil { return ("\(replaced ? "Updated" : "Added") \"\(plan.title)\".", true) }
+        return ("\(replaced ? "Updated" : "Added") \"\(plan.title)\". Now import its song file, \(plan.fileName).", true)
+    }
+
+    private func importSong(_ data: Data, name: String) throws -> (String, Bool) {
         let song = try MIDIFileParser.parse(data)
-        if let reason = file.problem(with: song) { throw ImportError.wrongSong(file.songName, reason: reason) }
+        let named = plans.filter { $0.fileName == name }
+        let target: String
+        if let plan = named.first {
+            if let problem = plan.problem(with: song) {
+                return ("\(name) doesn't fit \"\(plan.title)\": \(problem)", false)
+            }
+            target = name
+        } else if let plan = plansNeedingSong.first(where: { $0.problem(with: song) == nil }) {
+            target = plan.fileName
+        } else {
+            return ("\(name): no imported path uses this song. Import its plan file first, or both together.", false)
+        }
         try FileManager.default.createDirectory(at: Self.songFolder, withIntermediateDirectories: true)
-        try data.write(to: Self.url(of: file), options: .atomic)
-        songs[file.id] = song
-        forgetBuilt(using: file)
+        try data.write(to: Self.songFolder.appending(path: target), options: .atomic)
+        songs[target] = song
+        let opened = plans.filter { $0.fileName == target }
+        for plan in opened { built[plan.id] = nil }
+        return ("Song added for " + opened.map { "\"\($0.title)\"" }.joined(separator: ", ") + ".", true)
     }
 
-    /// Deletes the imported copy; the paths using it need an import again. Progress is kept.
-    func removeSong(for file: PathSongFile) {
-        try? FileManager.default.removeItem(at: Self.url(of: file))
-        songs[file.id] = nil
-        forgetBuilt(using: file)
-    }
-
-    private func forgetBuilt(using file: PathSongFile) {
-        for entry in GuidedPath.entries where entry.songFile?.id == file.id { built[entry.id] = nil }
+    /// Removes an imported path's plan, and its song file when no other plan uses it. Progress is kept, so importing it
+    /// again carries on where it was.
+    func remove(_ path: GuidedPath) {
+        guard let plan = plans.first(where: { $0.id == path.id }) else { return }
+        try? FileManager.default.removeItem(at: Self.planFolder.appending(path: plan.id + ".md"))
+        plans.removeAll { $0.id == plan.id }
+        built[plan.id] = nil
+        if !plans.contains(where: { $0.fileName == plan.fileName }) {
+            try? FileManager.default.removeItem(at: Self.songFolder.appending(path: plan.fileName))
+            songs[plan.fileName] = nil
+        }
     }
 
     func progress(of path: GuidedPath) -> PathProgress { progress[path.id] ?? PathProgress() }

@@ -92,7 +92,7 @@ public enum GreensleevesPiece {
     public static func song(_ section: Section, right: Right = .melody, left: Left = .full) -> Song {
         var notes: [NoteEvent] = []
         func add(_ name: String, finger: Int, at beat: Double, beats: Double, hand: Hand) {
-            notes.append(NoteEvent(id: 0, pitch: SetaregaanPiece.pitch(name), startBeat: beat, durationBeats: beats * 0.95,
+            notes.append(NoteEvent(id: 0, pitch: StaffExample.pitch(Substring(name))!, startBeat: beat, durationBeats: beats * 0.95,
                                    velocity: hand == .right ? 85 : 55, hand: hand, finger: finger))
         }
         for (i, bar) in section.bars.enumerated() {

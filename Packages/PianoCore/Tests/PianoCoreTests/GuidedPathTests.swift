@@ -1,11 +1,11 @@
 import XCTest
 @testable import PianoCore
 
-/// A made-up song shaped like the user's Setaregan file (the real notes stay out of the repo): 116 bars of 3/4,
+/// A made-up song shaped like the user's waltz arrangement for the plan files in `PathPlans` (the real notes stay out of the repo): 116 bars of 3/4,
 /// bars 1–2 a left-hand intro, a pickup (rest, two notes) at the start of every 4-bar group, otherwise three notes
 /// a bar; a note tied over bars 64–65; the last note tied from bar 114 to the end over a low note held in bars 115–116.
 /// Left hand: a low note on 1 and a two-note chord on 2 and 3. Every note has a finger.
-enum FakeSetaregaan {
+enum FakeWaltz {
     static let song: Song = make()
 
     static func make(bars: Int = 116, numerator: Int = 3, leftHand: Bool = true) -> Song {
@@ -41,88 +41,96 @@ enum FakeSetaregaan {
     }
 }
 
-final class SetaregaanPieceTests: XCTestCase {
-    typealias Piece = SetaregaanPiece
-    let source = FakeSetaregaan.song
+/// The plan files kept in the repo (`PathPlans/*.md`).
+enum RepoPlans {
+    static let folder = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent().appending(path: "PathPlans")
 
-    func testFileCheck() {
-        XCTAssertNil(Piece.problem(with: source))
-        XCTAssertNotNil(Piece.problem(with: FakeSetaregaan.make(bars: 40)), "too short")
-        XCTAssertNotNil(Piece.problem(with: FakeSetaregaan.make(numerator: 4)), "not 3/4")
-        XCTAssertNotNil(Piece.problem(with: FakeSetaregaan.make(leftHand: false)), "one hand only")
-        XCTAssertEqual(Piece.file.id, "ghoghaye-setaregan")
+    static func plan(_ name: String) throws -> PathPlan {
+        try PathPlan(text: String(contentsOf: folder.appending(path: name + ".md"), encoding: .utf8))
     }
 
-    func testSectionsAreWholeBarsOf3_4WithFingers() {
-        for section in Piece.Section.allCases {
-            for left in [Piece.Left.root, .rootAndChord, .full] {
-                for right in [Piece.Right.melody, .firstNotes] {
-                    let song = Piece.song(section, from: source, left: left, right: right)
-                    let name = song.title
+    static var all: [PathPlan] {
+        get throws {
+            try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
+                .filter { $0.pathExtension == "md" && $0.lastPathComponent != "README.md" }
+                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+                .map { try PathPlan(text: String(contentsOf: $0, encoding: .utf8)) }
+        }
+    }
+}
+
+final class PathPieceTests: XCTestCase {
+    let source = FakeWaltz.song
+
+    func piece(_ bars: ClosedRange<Int>, left: PathPiece.Left = .full, right: PathPiece.Right = .melody) -> Song {
+        PathPiece.song(from: source, bars: bars, left: left, right: right, title: "T")
+    }
+
+    func testPiecesAreWholeBarsWithFingers() {
+        for bars in [3...10, 27...34, 61...70, 107...116, 3...116] {
+            for left in PathPiece.Left.allCases {
+                for right in PathPiece.Right.allCases {
+                    let song = piece(bars, left: left, right: right)
+                    let name = "\(bars) \(left) \(right)"
                     XCTAssertEqual(song.timeSignatures.first?.numerator, 3, name)
                     XCTAssertEqual(song.tempoMap[0].bpm, 100, accuracy: 0.01, name)
                     XCTAssertTrue(song.notes.allSatisfy { $0.finger != nil }, name)
                     XCTAssertEqual(song.notes.map(\.id), Array(song.notes.indices), name)
-                    let bars = section.barCount
-                    XCTAssertEqual(song.barStartBeats.count, bars, name)
+                    XCTAssertEqual(song.barStartBeats.count, bars.count, name)
                     XCTAssertEqual(song.notes.first { $0.hand == .left }?.startBeat, 0, name)
-                    // Nothing runs past the piece.
                     for note in song.notes {
-                        XCTAssertLessThanOrEqual(note.startBeat + note.durationBeats, Double(bars) * 3 + 1e-9, name)
+                        XCTAssertLessThanOrEqual(note.startBeat + note.durationBeats, Double(bars.count) * 3 + 1e-9, name)
                     }
                 }
             }
         }
     }
 
-    func testSectionsAreCutAtScoreBars() {
-        // Section 1 is score bars 3–10: it starts with the pickup (first note on beat 2), shifted to the start.
-        let first = Piece.song(.first, from: source)
+    func testCutAtScoreBars() {
+        // Bars 3–10 start with the pickup (first note on beat 2), shifted to the start.
+        let first = piece(3...10)
         let right = first.notes.filter { $0.hand == .right }
         XCTAssertEqual(right.first?.startBeat, 1)
         XCTAssertEqual(right.first?.pitch, 64)
         XCTAssertEqual(right.first?.finger, 3)
         XCTAssertEqual(right.count, 2 + 3 * 3 + 2 + 3 * 3)
         XCTAssertEqual(first.notes.filter { $0.hand == .left }.count, 8 * 5)
-        // The whole song is score bars 3–116, everything after the intro.
-        let whole = Piece.song(.whole, from: source)
-        XCTAssertEqual(whole.notes.count, source.notes.filter { $0.startBeat >= 6 }.count)
-        // Parts add up.
-        XCTAssertEqual(Piece.song(.verse, from: source).notes.count,
-                       [Piece.Section.first, .second, .third].map { Piece.song($0, from: source).notes.count }.reduce(0, +))
+        XCTAssertEqual(piece(3...116).notes.count, source.notes.filter { $0.startBeat >= 6 }.count)
+        XCTAssertEqual(piece(3...26).notes.count, [3...10, 11...18, 19...26].map { piece($0).notes.count }.reduce(0, +))
     }
 
     func testTiesAndTheLastBars() {
         // The tied note in bars 64–65 is one note of five beats.
-        let gPos = Piece.song(.gPosition, from: source).notes.filter { $0.hand == .right }
+        let gPos = piece(61...70).notes.filter { $0.hand == .right }
         let tied = gPos.first { $0.startBeat == 10 }!
         XCTAssertEqual(tied.durationBeats, 5 * 0.95, accuracy: 1e-9)
         XCTAssertFalse(gPos.contains { $0.startBeat >= 12 && $0.startBeat < 15 }, "nothing new in bar 65")
-        // The ending: the last right-hand note is held to the end, over a low note for the last two bars.
-        let ending = Piece.song(.ending, from: source)
+        // The last right-hand note is held to the end, over a low note for the last two bars.
+        let ending = piece(107...116)
         let lastRight = ending.notes.filter { $0.hand == .right }.last!
         XCTAssertEqual(lastRight.startBeat + lastRight.durationBeats / 0.95, 30, accuracy: 1e-9)
         let lastLeft = ending.notes.filter { $0.hand == .left }.last!
         XCTAssertEqual(lastLeft.startBeat, 24)
         XCTAssertEqual(lastLeft.durationBeats, 6 * 0.95, accuracy: 1e-9)
+        // A piece that ends inside a tie cuts the note there.
+        let cut = piece(61...64).notes.filter { $0.hand == .right }.last!
+        XCTAssertEqual(cut.durationBeats, (12 - cut.startBeat) * 0.95, accuracy: 1e-9, "held to the end, written 95%")
     }
 
     func testEasierHands() {
-        // Low notes: one per bar, the downbeat's lowest, held the whole bar.
-        let roots = Piece.song(.second, from: source, left: .root).notes.filter { $0.hand == .left }
+        let roots = piece(11...18, left: .lowNotes).notes.filter { $0.hand == .left }
         XCTAssertEqual(roots.count, 8)
         XCTAssertTrue(roots.allSatisfy { $0.durationBeats == 3 * 0.95 && $0.finger == 5 })
         XCTAssertEqual(roots.map(\.startBeat), (0..<8).map { Double($0) * 3 })
-        // Low note + chord: the downbeat, then the chord on 2 held through 3.
-        let oomPah = Piece.song(.first, from: source, left: .rootAndChord).notes.filter { $0.hand == .left }
+        let oomPah = piece(3...10, left: .lowNoteAndChord).notes.filter { $0.hand == .left }
         XCTAssertEqual(oomPah.count, 8 * 3)
         XCTAssertEqual(oomPah.filter { $0.startBeat == 1 }.map(\.durationBeats), [2 * 0.95, 2 * 0.95])
         XCTAssertFalse(oomPah.contains { $0.startBeat == 2 })
-        // The last two bars keep their one held low note.
-        let endRoots = Piece.song(.ending, from: source, left: .root).notes.filter { $0.hand == .left }
+        let endRoots = piece(107...116, left: .lowNotes).notes.filter { $0.hand == .left }
         XCTAssertEqual(endRoots.last?.durationBeats ?? 0, 6 * 0.95, accuracy: 1e-9)
-        // Long notes: the first note of each bar, held to the end of the bar.
-        let simple = Piece.song(.first, from: source, right: .firstNotes).notes.filter { $0.hand == .right }
+        let simple = piece(3...10, right: .longNotes).notes.filter { $0.hand == .right }
         XCTAssertEqual(simple.count, 8, "one held note per bar")
         XCTAssertEqual(simple[0].startBeat, 1, "the pickup bar's first note is on beat 2")
         XCTAssertEqual(simple[0].durationBeats, 2 * 0.95, accuracy: 1e-9)
@@ -130,13 +138,108 @@ final class SetaregaanPieceTests: XCTestCase {
     }
 
     func testRoundTripsThroughMIDI() throws {
-        let song = Piece.song(.verse, from: source)
+        let song = piece(3...26)
         let parsed = try MIDIFileParser.parse(MIDIFileWriter.write(song))
         XCTAssertEqual(parsed.notes.map(\.pitch), song.notes.map(\.pitch))
         XCTAssertEqual(parsed.notes.map(\.finger), song.notes.map(\.finger))
         XCTAssertEqual(parsed.timeSignatures.first?.numerator, 3)
-        // A file written from the whole song (bars 1–116) passes the check.
-        XCTAssertNil(Piece.problem(with: try MIDIFileParser.parse(MIDIFileWriter.write(source))))
+    }
+}
+
+final class PathPlanTests: XCTestCase {
+    func testRepoPlans() throws {
+        let plans = try RepoPlans.all
+        XCTAssertEqual(plans.count, 2)
+        let twoHands = try RepoPlans.plan("Two Hands Together")
+        XCTAssertEqual(twoHands.id, "two-hands-setaregan")
+        XCTAssertEqual(twoHands.fileName, "Ghoghaye Setaregan.mid")
+        XCTAssertEqual(twoHands.lessons.count, 10)
+        XCTAssertEqual(twoHands.lessons.flatMap(\.steps).count, 38)
+        let secondHalf = try RepoPlans.plan("Setaregan Second Half")
+        XCTAssertEqual(secondHalf.lessons.count, 12)
+        XCTAssertEqual(secondHalf.lessons.flatMap(\.steps).count, 49)
+        XCTAssertEqual(secondHalf.fileName, twoHands.fileName, "both plans use one song file")
+        for plan in plans {
+            XCTAssertNil(plan.problem(with: FakeWaltz.song), plan.title)
+            XCTAssertFalse(plan.summary.isEmpty, plan.title)
+        }
+        // First step of Two Hands Together.
+        let first = twoHands.lessons[0].steps[0]
+        XCTAssertEqual(first.mode, .listen)
+        XCTAssertEqual(first.speed, 0.75)
+        XCTAssertEqual(first.part, "Section 1")
+        let lowNotes = twoHands.lessons[3].steps[0]
+        XCTAssertEqual(lowNotes.left, .lowNotes)
+        XCTAssertEqual(lowNotes.runs, 2)
+    }
+
+    func testSongCheck() throws {
+        let plan = try RepoPlans.plan("Two Hands Together")
+        XCTAssertNil(plan.problem(with: FakeWaltz.song))
+        XCTAssertNotNil(plan.problem(with: FakeWaltz.make(bars: 40)), "too short")
+        XCTAssertNotNil(plan.problem(with: FakeWaltz.make(numerator: 4)), "not 3/4")
+        XCTAssertNotNil(plan.problem(with: FakeWaltz.make(leftHand: false)), "one hand only")
+        // A file written from the song passes too.
+        XCTAssertNil(plan.problem(with: try MIDIFileParser.parse(MIDIFileWriter.write(FakeWaltz.song))))
+    }
+
+    func testBuildsPiecesFromTheSong() throws {
+        let plan = try RepoPlans.plan("Two Hands Together")
+        let path = plan.path(with: FakeWaltz.song)
+        XCTAssertEqual(path.id, plan.id)
+        XCTAssertEqual(path.steps.map(\.id).prefix(4), ["1.1", "1.2", "1.3", "2.1"])
+        let step = path.steps[0]
+        XCTAssertEqual(step.song.title, "Setaregan · Section 1")
+        XCTAssertEqual(step.song.notes.map(\.pitch), PathPiece.song(from: FakeWaltz.song, bars: 3...10, title: "").notes.map(\.pitch))
+        let low = path.lessons[3].steps[0]
+        XCTAssertEqual(low.song.title, "Setaregan · Section 1 · low notes")
+        XCTAssertEqual(path.lessons[0].steps[0].song.notes, path.lessons[0].steps[1].song.notes, "same part, same version")
+    }
+
+    func testSmallPlanAndErrors() throws {
+        let text = """
+            # Tiny
+            id: tiny
+            file: tiny.mid
+            time: 3/4
+            bars: 4
+
+            A tiny path.
+
+            ## Parts
+            A: 1-2
+
+            ## Lesson: One
+            goal: Try it.
+
+            ### Go
+            piece: A
+            right: long notes
+            play: play along left 70%
+            runs: 2
+            Play the left hand
+            while the app plays the right.
+            """
+        let plan = try PathPlan(text: text)
+        XCTAssertEqual(plan.songName, "tiny")
+        XCTAssertEqual(plan.shortName, "tiny")
+        let step = plan.lessons[0].steps[0]
+        XCTAssertEqual(step.mode, .playAlong)
+        XCTAssertEqual(step.hand, .bass)
+        XCTAssertEqual(step.speed, 0.7, accuracy: 1e-9)
+        XCTAssertEqual(step.right, .longNotes)
+        XCTAssertEqual(step.instruction, "Play the left hand while the app plays the right.")
+
+        func error(_ change: (String) -> String) -> PathPlan.ParseError? {
+            do { _ = try PathPlan(text: change(text)); return nil } catch { return error as? PathPlan.ParseError }
+        }
+        XCTAssertEqual(error { $0.replacingOccurrences(of: "piece: A", with: "piece: B") }?.line, 15, "unknown part")
+        XCTAssertEqual(error { $0.replacingOccurrences(of: "play along left", with: "play along") }?.line, 15)
+        XCTAssertEqual(error { $0.replacingOccurrences(of: "A: 1-2", with: "A: 1-9") }?.line, 10, "past the song's end")
+        XCTAssertNotNil(error { $0.replacingOccurrences(of: "id: tiny\n", with: "") }, "no id")
+        XCTAssertNotNil(error { $0.replacingOccurrences(of: "goal: Try it.", with: "") }, "no goal")
+        XCTAssertNotNil(error { $0.replacingOccurrences(of: "## Lesson", with: "## Lessons") }, "unknown heading")
+        XCTAssertNil(error { $0 })
     }
 }
 
@@ -205,23 +308,14 @@ final class GreensleevesPieceTests: XCTestCase {
 }
 
 final class GuidedPathTests: XCTestCase {
-    let path = TwoHandsPath.entry.path(with: FakeSetaregaan.song)!
+    let path = try! RepoPlans.plan("Two Hands Together").path(with: FakeWaltz.song)
 
-    func testPathContent() {
+    func testPathContent() throws {
         XCTAssertEqual(path.lessons.count, 10)
         XCTAssertEqual(GreensleevesPath.path.lessons.count, 9)
-        let entries = GuidedPath.entries
-        XCTAssertEqual(Set(entries.map(\.id)).count, entries.count, "unique path ids")
-        let paths = entries.map { $0.path(with: FakeSetaregaan.song)! }
-        XCTAssertEqual(paths.map(\.id), entries.map(\.id))
-        XCTAssertEqual(paths[1].lessons.count, 12, "Setaregan: Second Half")
+        let paths = GuidedPath.builtIn + (try RepoPlans.all).map { $0.path(with: FakeWaltz.song) }
+        XCTAssertEqual(Set(paths.map(\.id)).count, paths.count, "unique path ids")
         for path in paths { check(path) }
-        // A path built from a file needs the file, and the right one.
-        XCTAssertNil(TwoHandsPath.entry.path(with: nil))
-        XCTAssertNil(TwoHandsPath.entry.path(with: FakeSetaregaan.make(bars: 40)))
-        XCTAssertNotNil(TwoHandsPath.entry.songFile)
-        XCTAssertNil(entries[2].songFile, "Greensleeves is built in")
-        XCTAssertNotNil(entries[2].path(with: nil))
         XCTAssertEqual(path.step(after: path.steps[2])?.id, "2.1")
         XCTAssertNil(path.step(after: path.steps.last!))
         XCTAssertEqual(path.lesson(of: path.steps[3])?.number, 2)
