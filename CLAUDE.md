@@ -12,5 +12,7 @@ Rules:
 - The user prefers small steps; don't overbuild ahead of the current milestone.
 - Test core logic with `scripts/check-core.sh`; build and run the app as in docs/DEVELOPMENT.md.
 - Keep music logic in `Packages/PianoCore` (no UI imports); app code goes in `App/Sources`.
+- **Never put the notes of a copyrighted song in the repo** (it is public): write guided paths as plan files in `PathPlans/`;
+  the song's `.mid` is imported in the app. Keep song names out of commit titles.
 - **Never run `git commit` yourself.** When the user asks for a commit message, write it as plain text in the chat;
   the user commits.

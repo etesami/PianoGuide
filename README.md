@@ -19,6 +19,9 @@ This is a personal project and is not planned for the App Store. See [Project st
 - **Song overview:** the whole piece in small staves, with repeated sections marked so you know how much there really is to learn.
 - **Song library:** bundled practice pieces with lesson notes, plus your own `.mid` files imported from the Files app.
   Finished songs get a check mark, songs with many recent wrong notes are flagged as difficult, and you can mark songs yourself.
+- **Guided paths:** step-by-step lessons on a real piece, each step played a set way (listen, wait, timed, play along, one hand
+  or both, at a speed) and passed with good runs in a row before the next one opens. New paths are plan files (`.md`) imported in
+  the app together with the song's `.mid`, so a path needs no code (see [PathPlans/README.md](PathPlans/README.md)).
 - **Reading help:** note names on the keys and finger numbers on the staff (each can be turned off), and bar controls to jump around the song.
 
 ## Screenshots
@@ -69,3 +72,4 @@ doesn't draw rests, beams, dots or flats yet.
 - `Packages/PianoCore`: the music logic, with no UI code: song model, MIDI parser and writer, practice engines, staff layout
 - `App/Sources`: the SwiftUI screens and CoreMIDI input
 - `App/Resources/SampleSongs`: the bundled songs and their lesson notes
+- `PathPlans`: guided paths as plan files; their songs are imported in the app and are not in the repo

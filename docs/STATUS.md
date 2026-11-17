@@ -440,8 +440,10 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
 
 ## Next steps (in order)
 
-0. User to **import the Setaregan paths** on the iPad: Paths → Import Files… → pick `Ghoghaye Setaregan.mid` and the two plan
-   files from `PathPlans/` (copy them next to the `.mid` in Google Drive first). Optional: ask GitHub
+0. User to **import the Setaregan paths** on the iPad (install the new build first): Paths → Import Files… → Drive →
+   `z-tmp/Piano/songs` → select `Ghoghaye Setaregan.mid`, `Two Hands Together.md`, `Setaregan Second Half.md` (the plans were
+   copied there and checked against the song on 2026-11-16). If the picker won't select `.md` files, fix the importer's types.
+   Optional: ask GitHub
    Support to purge the old commit `0da17a0` from its cache; then the backup `../PianoGuide-backup.git` can be deleted.
 0. User to try **Setaregan: Second Half** (Paths → second path) and the **Steps sheet fix**. Open questions: are the 8–14-bar parts
    the right size, or should the climb / high part be split? Is two runs in a row of the whole song (3½ min) too much?

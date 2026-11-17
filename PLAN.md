@@ -230,6 +230,9 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done (verified on iPad).
   a step is passed by a steady hand, not a lucky one. Every lesson states its **goal** and a few **tips**; every step says exactly
   what to press.
 - **Reuse what the app already has** (wait/timed modes, one hand by clef, Play Along, Listen, result card) instead of new modes; the
-  path only sets them up and checks the result. Pieces are generated in `PianoCore` from note data, so they are tested.
+  path only sets them up and checks the result. Pieces are cut by bars from the song (with easier versions made from its own
+  notes), so they are tested.
+- **A path is a plan file** (`PathPlans/*.md`, session 33), imported in the app with the song's `.mid`: new paths need no code, and
+  copyrighted music stays out of the repo.
 - **The plan came first** (findings + plan in a few lines, then building), and the result was checked on screen in the simulator,
   including landscape, before calling it done.

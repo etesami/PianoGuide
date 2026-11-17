@@ -133,6 +133,11 @@ once (steps 1 and 4 above); after that it also works over Wi-Fi.
 | `…/StaffLayout.swift` | Staff positions (clef, line/space, sharps, ledger lines), `NoteValue`, bar lines |
 | `…/PracticeResult.swift` | Result of a finished run (perfect / almost / needs practice), shown by `PracticeResultView` |
 | `…/SongProgress.swift` | Per-song progress: times completed, recent wrong notes, "difficult" rule (mistakes > 10% of the notes); the user's own `SongMark` (hard / interesting) |
+| `…/GuidedPath.swift` | Guided path model: lessons, steps (mode, hand, speed, runs), `PathStep.verdict`, `PathProgress`; `GuidedPath.builtIn` |
+| `…/PathPlan.swift` | Plan files (`PathPlans/*.md`) → `GuidedPath`: parser with line-numbered errors, check that a song fits, builds the pieces |
+| `…/PathPiece.swift` | Cuts a piece out of a song by bars, with easier versions (left: low notes, low note + chord; right: long notes) |
+| `…/GreensleevesPath.swift`, `GreensleevesPieces.swift` | The built-in path "Greensleeves: Moving Hand" (public domain, notes in code) |
+| `PathPlans/` | Plan files for paths whose songs are imported (format in its README); every plan is parsed and built by the core tests |
 | `…/PracticeNote.swift` | Lesson note parsed from a small Markdown subset (title, headings, bullets, paragraphs) and `StaffExample` (```` ```staff ```` music examples) |
 | `App/Resources/SampleSongs/<level>/x.md` | Lesson note for `x.mid`, shown when the song is picked |
 | `App/Icon/AppIcon.svg` | App icon source; `scripts/make-icon.sh` writes `App/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png` (one 1024 px image; Xcode makes the iPad and Mac sizes) |
@@ -146,7 +151,22 @@ once (steps 1 and 4 above); after that it also works over Wi-Fi.
 | `App/Sources/SongLibraryView.swift` | "Songs" sheet: category folders, pick a song, swipe to delete, Import button (`fileImporter`); completed (green check) and difficult (orange) marks; user marks (swipe right / long-press, "Marked" section); `SongMarkPicker` (also used by the flag button in `PracticeView`) |
 | `App/Sources/SongOverviewView.swift` | The whole song in small staves, grouped into its sections; the toolbar button in `PracticeView` turns it on (`StaffView.Line` draws each line) |
 | `App/Sources/StaffView.swift` | Grand staff drawn in a `Canvas`, scrolling past the cursor (`scrollBeat` is animatable) |
+| `App/Sources/PathStore.swift` | Path progress (UserDefaults `pathProgress`) and imported paths: plans in Application Support/PathPlans, songs in PathSongs |
+| `App/Sources/PathsView.swift` | "Paths" sheet (list, Import Files…, a path's lessons and steps, Remove Path…) and the step banner over the practice screen |
 | `App/Sources/KeyboardView.swift` | On-screen piano that can be tapped; note-name labels and key colors |
+
+## Add a guided path
+
+1. Write a plan file in `PathPlans/` (copy one of the two there; the format is in `PathPlans/README.md`). Parts are score bars of
+   the song's `.mid`, bar 1 being the file's first bar. Follow the recipe in [PLAN.md §10](../PLAN.md#10-what-worked-keep-doing-this).
+2. Run `scripts/check-core.sh`: the tests parse every plan and build it from a made-up waltz (`FakeWaltz` in `GuidedPathTests.swift`),
+   so a plan for another shape of song may need its own made-up song in the tests.
+3. Check it against the real song without the app: build a throwaway `main.swift` that reads the plan and the `.mid` and prints
+   `plan.problem(with: song)` and the step count (`swiftc -O -o chk Packages/PianoCore/Sources/PianoCore/*.swift main.swift`).
+4. Copy the plan next to the song in Google Drive (`My Drive/z-tmp/Piano/songs`) and import both in the app: Paths → Import Files….
+
+**Never put the notes of a copyrighted song in the repo** (code, tests or bundled `.mid`): the GitHub repo is public. Such songs
+are only ever imported in the app. Public-domain tunes may be built in, like Greensleeves.
 
 ## Conventions
 
