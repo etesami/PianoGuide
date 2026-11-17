@@ -29,8 +29,65 @@ public struct GuidedPath: Identifiable, Sendable {
         return all[i + 1]
     }
 
-    /// The paths the app offers.
-    public static let all: [GuidedPath] = [TwoHandsPath.path, GreensleevesPath.path]
+    /// The paths the app offers, in the Paths list's order. Some are built from a song file the player imports.
+    public static let entries: [PathEntry] = [TwoHandsPath.entry, SetaregaanSecondHalfPath.entry, PathEntry(GreensleevesPath.path)]
+}
+
+/// A song file that paths are built from. The player imports it, so music that can't be shared stays out of the repo.
+/// Several paths can share one file (same `id`); it is imported once.
+public struct PathSongFile: Sendable {
+    /// Storage key for the imported copy.
+    public let id: String
+    /// "Ghoghaye Setaregan".
+    public let songName: String
+    /// Which file to import, in a sentence or two.
+    public let hint: String
+    private let check: @Sendable (Song) -> String?
+
+    /// `check` returns nil when a song is the right one, or why it isn't ("It has 40 bars; this path needs 116.").
+    public init(id: String, songName: String, hint: String, check: @escaping @Sendable (Song) -> String?) {
+        self.id = id
+        self.songName = songName
+        self.hint = hint
+        self.check = check
+    }
+
+    /// Nil when `song` can be used, else the reason it can't.
+    public func problem(with song: Song) -> String? { check(song) }
+}
+
+/// One path in the Paths list: built in, or built from a song file the player imports (`songFile`).
+public struct PathEntry: Identifiable, Sendable {
+    public let id: String
+    public let title: String
+    public let summary: String
+    public let songFile: PathSongFile?
+    private let build: @Sendable (Song?) -> GuidedPath?
+
+    /// A path that needs nothing imported.
+    public init(_ path: GuidedPath) {
+        id = path.id
+        title = path.title
+        summary = path.summary
+        songFile = nil
+        build = { _ in path }
+    }
+
+    /// A path built from `songFile`; `build` gets the imported song, already checked with `songFile.problem(with:)`.
+    public init(id: String, title: String, summary: String, songFile: PathSongFile,
+                build: @escaping @Sendable (Song) -> [PathLesson]) {
+        self.id = id
+        self.title = title
+        self.summary = summary
+        self.songFile = songFile
+        self.build = { song in
+            guard let song, songFile.problem(with: song) == nil else { return nil }
+            return GuidedPath(id: id, title: title, summary: summary, lessons: build(song))
+        }
+    }
+
+    /// The path, or nil while its song file is missing or isn't the right song.
+    public func path(with song: Song?) -> GuidedPath? { build(song) }
 }
 
 public struct PathLesson: Identifiable, Sendable {

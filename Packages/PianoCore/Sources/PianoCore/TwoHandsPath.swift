@@ -8,7 +8,8 @@ import Foundation
 /// 5. Wait mode first at every layer (no time pressure, it shows what goes together), then timed mode from slow to full speed.
 /// 6. Short parts (8 bars) first, then join them.
 public enum TwoHandsPath {
-    public static let path = GuidedPath(
+    /// Built from the imported song file (`SetaregaanPiece.file`).
+    public static let entry = PathEntry(
         id: "two-hands-setaregan",
         title: "Two Hands Together",
         summary: """
@@ -17,12 +18,16 @@ public enum TwoHandsPath {
             the hands meet a little at a time. Each step opens when the one before is passed. Short sessions work \
             best: 15–20 minutes, then stop, even in the middle of a lesson.
             """,
-        lessons: lessons)
+        songFile: Piece.file,
+        build: lessons)
 
     private typealias Piece = SetaregaanPiece
 
-    private static var lessons: [PathLesson] {
-        let first = Piece.song(.first)
+    @Sendable private static func lessons(_ source: Song) -> [PathLesson] {
+        func piece(_ section: Piece.Section, left: Piece.Left = .full, right: Piece.Right = .melody) -> Song {
+            Piece.song(section, from: source, left: left, right: right)
+        }
+        let first = piece(.first)
         var lessons: [PathLesson] = []
         func lesson(_ title: String, goal: String, tips: [String], _ steps: [(String, String, Song, PathStep.Mode, Clef?, Double, Int)]) {
             let number = lessons.count + 1
@@ -69,7 +74,7 @@ public enum TwoHandsPath {
                  first, .playAlong, .bass, 0.7, 2),
                 ("Melody, faster", "Play along with the right hand at 90%.", first, .playAlong, .treble, 0.9, 1)])
 
-        let roots = Piece.song(.first, left: .root)
+        let roots = piece(.first, left: .root)
         lesson("Meet on beat one",
                goal: "Both hands for the first time. The left hand plays only one long note per bar, together with the "
                    + "right hand's note on 1.",
@@ -81,7 +86,7 @@ public enum TwoHandsPath {
                 ("Slowly in time", "Press Play. Count out loud.", roots, .timed, nil, 0.6, 2),
                 ("Faster", "The same at 80%.", roots, .timed, nil, 0.8, 2)])
 
-        let oomPah = Piece.song(.first, left: .rootAndChord)
+        let oomPah = piece(.first, left: .rootAndChord)
         lesson("Add the chord",
                goal: "The left hand adds its chord on beat 2 and holds it through 3. Now the hands meet on 1 and on 2.",
                tips: ["Say \"oom-pah\" for the left hand: low note, chord, hold.",
@@ -91,7 +96,7 @@ public enum TwoHandsPath {
                 ("Slowly in time", "Press Play.", oomPah, .timed, nil, 0.6, 2),
                 ("Faster", "The same at 80%.", oomPah, .timed, nil, 0.8, 2)])
 
-        let simpleTop = Piece.song(.first, right: .firstNotes)
+        let simpleTop = piece(.first, right: .firstNotes)
         lesson("Full waltz, simple melody",
                goal: "The left hand plays its full waltz while the right hand holds one note per bar. "
                    + "The left hand keeps going by itself; the right hand only drops in.",
@@ -111,7 +116,7 @@ public enum TwoHandsPath {
                 ("A bit faster", "The same at 65%.", first, .timed, nil, 0.65, 2),
                 ("Faster again", "The same at 80%.", first, .timed, nil, 0.8, 2)])
 
-        let second = Piece.song(.second)
+        let second = piece(.second)
         lesson("Section 2: the run",
                goal: "Score bars 11–18: the melody climbs to A, then runs down C B A G F over the F chord. "
                    + "The same ladder as before, in fewer steps.",
@@ -121,23 +126,23 @@ public enum TwoHandsPath {
                [("Right hand alone", "Wait mode, right hand.", second, .wait, .treble, 1, 1),
                 ("Left hand alone", "In time, left hand.", second, .timed, .bass, 0.8, 1),
                 ("Low notes only", "Wait mode, both hands, with the left hand on long notes.",
-                 Piece.song(.second, left: .root), .wait, nil, 1, 1),
+                 piece(.second, left: .root), .wait, nil, 1, 1),
                 ("Together, no hurry", "Wait mode, full waltz.", second, .wait, nil, 1, 2),
                 ("Slowly in time", "Press Play.", second, .timed, nil, 0.6, 2),
                 ("Faster", "The same at 80%.", second, .timed, nil, 0.8, 2)])
 
-        let third = Piece.song(.third)
+        let third = piece(.third)
         lesson("Section 3",
                goal: "Score bars 19–26: the first section's melody with new turns.",
                tips: ["Bar 6 has a rest on beat 3 in the right hand: the left hand plays on alone.",
                       "Bars 3 and 7 end on A (finger 4) over the F chord."],
                [("Low notes only", "Wait mode, both hands, with the left hand on long notes.",
-                 Piece.song(.third, left: .root), .wait, nil, 1, 1),
+                 piece(.third, left: .root), .wait, nil, 1, 1),
                 ("Together, no hurry", "Wait mode, full waltz.", third, .wait, nil, 1, 2),
                 ("Slowly in time", "Press Play.", third, .timed, nil, 0.6, 2),
                 ("Faster", "The same at 80%.", third, .timed, nil, 0.8, 2)])
 
-        let verse = Piece.song(.verse)
+        let verse = piece(.verse)
         lesson("The whole verse",
                goal: "Score bars 3–26 in one go, 24 bars, up to the song's own speed.",
                tips: ["The joins between the sections are where it breaks: drag back and play across them a few times.",

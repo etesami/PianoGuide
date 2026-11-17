@@ -1,12 +1,63 @@
 import XCTest
 @testable import PianoCore
 
+/// A made-up song shaped like the user's Setaregan file (the real notes stay out of the repo): 116 bars of 3/4,
+/// bars 1–2 a left-hand intro, a pickup (rest, two notes) at the start of every 4-bar group, otherwise three notes
+/// a bar; a note tied over bars 64–65; the last note tied from bar 114 to the end over a low note held in bars 115–116.
+/// Left hand: a low note on 1 and a two-note chord on 2 and 3. Every note has a finger.
+enum FakeSetaregaan {
+    static let song: Song = make()
+
+    static func make(bars: Int = 116, numerator: Int = 3, leftHand: Bool = true) -> Song {
+        var notes: [NoteEvent] = []
+        func add(_ pitch: UInt8, _ start: Double, _ beats: Double, _ hand: Hand, _ finger: Int) {
+            notes.append(NoteEvent(id: 0, pitch: pitch, startBeat: start, durationBeats: beats * 0.95, velocity: 80,
+                                   hand: hand, finger: finger))
+        }
+        for bar in 1...bars {
+            let s = Double(bar - 1) * 3
+            if bar >= 3 {
+                switch bar {
+                case 64: add(60, s, 1, .right, 1); add(62, s + 1, 5, .right, 2)    // tied into bar 65
+                case 65, 115, 116: break
+                case 114: add(60, s, 1, .right, 1); add(64, s + 1, 8, .right, 3)  // tied to the end
+                case _ where (bar - 3) % 4 == 0: add(64, s + 1, 1, .right, 3); add(65, s + 2, 1, .right, 4)
+                default: for i in 0..<3 { add(UInt8(67 + i), s + Double(i), 1, .right, i + 1) }
+                }
+            }
+            guard leftHand else { continue }
+            if bar == 115 { add(40, s, 6, .left, 5); continue }
+            if bar == 116 { continue }
+            add(bar % 2 == 0 ? 41 : 40, s, 1, .left, 5)
+            for beat in [1.0, 2.0] { add(55, s + beat, 1, .left, 3); add(59, s + beat, 1, .left, 1) }
+        }
+        notes.sort { ($0.startBeat, $0.pitch) < ($1.startBeat, $1.pitch) }
+        return Song(title: "Fake", tempoMap: [TempoChange(beat: 0, microsecondsPerQuarter: 600_000)],
+                    timeSignatures: [TimeSignature(beat: 0, numerator: numerator, denominator: 4)],
+                    notes: notes.enumerated().map { i, n in
+                        NoteEvent(id: i, pitch: n.pitch, startBeat: n.startBeat, durationBeats: n.durationBeats,
+                                  velocity: n.velocity, hand: n.hand, finger: n.finger)
+                    })
+    }
+}
+
 final class SetaregaanPieceTests: XCTestCase {
+    typealias Piece = SetaregaanPiece
+    let source = FakeSetaregaan.song
+
+    func testFileCheck() {
+        XCTAssertNil(Piece.problem(with: source))
+        XCTAssertNotNil(Piece.problem(with: FakeSetaregaan.make(bars: 40)), "too short")
+        XCTAssertNotNil(Piece.problem(with: FakeSetaregaan.make(numerator: 4)), "not 3/4")
+        XCTAssertNotNil(Piece.problem(with: FakeSetaregaan.make(leftHand: false)), "one hand only")
+        XCTAssertEqual(Piece.file.id, "ghoghaye-setaregan")
+    }
+
     func testSectionsAreWholeBarsOf3_4WithFingers() {
-        for section in SetaregaanPiece.Section.allCases {
-            for left in [SetaregaanPiece.Left.root, .rootAndChord, .full] {
-                for right in [SetaregaanPiece.Right.melody, .firstNotes] {
-                    let song = SetaregaanPiece.song(section, left: left, right: right)
+        for section in Piece.Section.allCases {
+            for left in [Piece.Left.root, .rootAndChord, .full] {
+                for right in [Piece.Right.melody, .firstNotes] {
+                    let song = Piece.song(section, from: source, left: left, right: right)
                     let name = song.title
                     XCTAssertEqual(song.timeSignatures.first?.numerator, 3, name)
                     XCTAssertEqual(song.tempoMap[0].bpm, 100, accuracy: 0.01, name)
@@ -14,54 +65,78 @@ final class SetaregaanPieceTests: XCTestCase {
                     XCTAssertEqual(song.notes.map(\.id), Array(song.notes.indices), name)
                     let bars = section.barCount
                     XCTAssertEqual(song.barStartBeats.count, bars, name)
-                    // The left hand starts every bar.
-                    let leftStarts = Set(song.notes.filter { $0.hand == .left }.map(\.startBeat))
-                    for bar in 0..<bars { XCTAssertTrue(leftStarts.contains(Double(bar) * 3), "\(name) bar \(bar + 1)") }
-                    // No note runs past its bar.
+                    XCTAssertEqual(song.notes.first { $0.hand == .left }?.startBeat, 0, name)
+                    // Nothing runs past the piece.
                     for note in song.notes {
-                        let barEnd = (floor(note.startBeat / 3) + 1) * 3
-                        XCTAssertLessThanOrEqual(note.startBeat + note.durationBeats, barEnd + 1e-9, name)
+                        XCTAssertLessThanOrEqual(note.startBeat + note.durationBeats, Double(bars) * 3 + 1e-9, name)
                     }
                 }
             }
         }
     }
 
-    func testFirstSectionNotes() {
-        let song = SetaregaanPiece.song(.first)
-        let right = song.notes.filter { $0.hand == .right }
-        // Pickup E F, then G F, G F, G E, twice.
-        XCTAssertEqual(right.prefix(8).map { NoteName.of($0.pitch) }, ["E4", "F4", "G4", "F4", "G4", "F4", "G4", "E4"])
-        XCTAssertEqual(right.prefix(8).map(\.finger), [1, 2, 3, 2, 3, 2, 3, 1])
-        XCTAssertEqual(right.count, 16)
-        // Bar 2 (score bar 4) is an F chord: F3 on 1, A3 + C4 on 2 and 3.
-        let bar2 = song.notes.filter { $0.hand == .left && $0.startBeat >= 3 && $0.startBeat < 6 }
-        XCTAssertEqual(bar2.map { NoteName.of($0.pitch) }, ["F3", "A3", "C4", "A3", "C4"])
-        XCTAssertEqual(PracticeSteps.make(from: song.notes, clef: .bass).count, 24)
+    func testSectionsAreCutAtScoreBars() {
+        // Section 1 is score bars 3–10: it starts with the pickup (first note on beat 2), shifted to the start.
+        let first = Piece.song(.first, from: source)
+        let right = first.notes.filter { $0.hand == .right }
+        XCTAssertEqual(right.first?.startBeat, 1)
+        XCTAssertEqual(right.first?.pitch, 64)
+        XCTAssertEqual(right.first?.finger, 3)
+        XCTAssertEqual(right.count, 2 + 3 * 3 + 2 + 3 * 3)
+        XCTAssertEqual(first.notes.filter { $0.hand == .left }.count, 8 * 5)
+        // The whole song is score bars 3–116, everything after the intro.
+        let whole = Piece.song(.whole, from: source)
+        XCTAssertEqual(whole.notes.count, source.notes.filter { $0.startBeat >= 6 }.count)
+        // Parts add up.
+        XCTAssertEqual(Piece.song(.verse, from: source).notes.count,
+                       [Piece.Section.first, .second, .third].map { Piece.song($0, from: source).notes.count }.reduce(0, +))
+    }
+
+    func testTiesAndTheLastBars() {
+        // The tied note in bars 64–65 is one note of five beats.
+        let gPos = Piece.song(.gPosition, from: source).notes.filter { $0.hand == .right }
+        let tied = gPos.first { $0.startBeat == 10 }!
+        XCTAssertEqual(tied.durationBeats, 5 * 0.95, accuracy: 1e-9)
+        XCTAssertFalse(gPos.contains { $0.startBeat >= 12 && $0.startBeat < 15 }, "nothing new in bar 65")
+        // The ending: the last right-hand note is held to the end, over a low note for the last two bars.
+        let ending = Piece.song(.ending, from: source)
+        let lastRight = ending.notes.filter { $0.hand == .right }.last!
+        XCTAssertEqual(lastRight.startBeat + lastRight.durationBeats / 0.95, 30, accuracy: 1e-9)
+        let lastLeft = ending.notes.filter { $0.hand == .left }.last!
+        XCTAssertEqual(lastLeft.startBeat, 24)
+        XCTAssertEqual(lastLeft.durationBeats, 6 * 0.95, accuracy: 1e-9)
     }
 
     func testEasierHands() {
-        let roots = SetaregaanPiece.song(.second, left: .root)
-        XCTAssertEqual(roots.notes.filter { $0.hand == .left }.count, 8, "one low note per bar")
-        let oomPah = SetaregaanPiece.song(.first, left: .rootAndChord)
-        XCTAssertEqual(oomPah.notes.filter { $0.hand == .left }.count, 8 * 3)
-        let simple = SetaregaanPiece.song(.first, right: .firstNotes)
-        let right = simple.notes.filter { $0.hand == .right }
-        XCTAssertEqual(right.count, 8, "one held note per bar")
-        XCTAssertEqual(right[0].startBeat, 1, "the pickup bar's first note is on beat 2")
-        XCTAssertEqual(right[0].durationBeats, 2 * 0.95, accuracy: 1e-9)
-        XCTAssertEqual(right[1].durationBeats, 3 * 0.95, accuracy: 1e-9)
-        XCTAssertEqual(SetaregaanPiece.song(.verse).notes.filter { $0.hand == .right }.count,
-                       [SetaregaanPiece.Section.first, .second, .third]
-                           .map { SetaregaanPiece.song($0).notes.filter { $0.hand == .right }.count }.reduce(0, +))
+        // Low notes: one per bar, the downbeat's lowest, held the whole bar.
+        let roots = Piece.song(.second, from: source, left: .root).notes.filter { $0.hand == .left }
+        XCTAssertEqual(roots.count, 8)
+        XCTAssertTrue(roots.allSatisfy { $0.durationBeats == 3 * 0.95 && $0.finger == 5 })
+        XCTAssertEqual(roots.map(\.startBeat), (0..<8).map { Double($0) * 3 })
+        // Low note + chord: the downbeat, then the chord on 2 held through 3.
+        let oomPah = Piece.song(.first, from: source, left: .rootAndChord).notes.filter { $0.hand == .left }
+        XCTAssertEqual(oomPah.count, 8 * 3)
+        XCTAssertEqual(oomPah.filter { $0.startBeat == 1 }.map(\.durationBeats), [2 * 0.95, 2 * 0.95])
+        XCTAssertFalse(oomPah.contains { $0.startBeat == 2 })
+        // The last two bars keep their one held low note.
+        let endRoots = Piece.song(.ending, from: source, left: .root).notes.filter { $0.hand == .left }
+        XCTAssertEqual(endRoots.last?.durationBeats ?? 0, 6 * 0.95, accuracy: 1e-9)
+        // Long notes: the first note of each bar, held to the end of the bar.
+        let simple = Piece.song(.first, from: source, right: .firstNotes).notes.filter { $0.hand == .right }
+        XCTAssertEqual(simple.count, 8, "one held note per bar")
+        XCTAssertEqual(simple[0].startBeat, 1, "the pickup bar's first note is on beat 2")
+        XCTAssertEqual(simple[0].durationBeats, 2 * 0.95, accuracy: 1e-9)
+        XCTAssertEqual(simple[1].durationBeats, 3 * 0.95, accuracy: 1e-9)
     }
 
     func testRoundTripsThroughMIDI() throws {
-        let song = SetaregaanPiece.song(.verse)
+        let song = Piece.song(.verse, from: source)
         let parsed = try MIDIFileParser.parse(MIDIFileWriter.write(song))
         XCTAssertEqual(parsed.notes.map(\.pitch), song.notes.map(\.pitch))
         XCTAssertEqual(parsed.notes.map(\.finger), song.notes.map(\.finger))
         XCTAssertEqual(parsed.timeSignatures.first?.numerator, 3)
+        // A file written from the whole song (bars 1–116) passes the check.
+        XCTAssertNil(Piece.problem(with: try MIDIFileParser.parse(MIDIFileWriter.write(source))))
     }
 }
 
@@ -130,13 +205,23 @@ final class GreensleevesPieceTests: XCTestCase {
 }
 
 final class GuidedPathTests: XCTestCase {
-    let path = TwoHandsPath.path
+    let path = TwoHandsPath.entry.path(with: FakeSetaregaan.song)!
 
     func testPathContent() {
         XCTAssertEqual(path.lessons.count, 10)
         XCTAssertEqual(GreensleevesPath.path.lessons.count, 9)
-        XCTAssertEqual(Set(GuidedPath.all.map(\.id)).count, GuidedPath.all.count, "unique path ids")
-        for path in GuidedPath.all { check(path) }
+        let entries = GuidedPath.entries
+        XCTAssertEqual(Set(entries.map(\.id)).count, entries.count, "unique path ids")
+        let paths = entries.map { $0.path(with: FakeSetaregaan.song)! }
+        XCTAssertEqual(paths.map(\.id), entries.map(\.id))
+        XCTAssertEqual(paths[1].lessons.count, 12, "Setaregan: Second Half")
+        for path in paths { check(path) }
+        // A path built from a file needs the file, and the right one.
+        XCTAssertNil(TwoHandsPath.entry.path(with: nil))
+        XCTAssertNil(TwoHandsPath.entry.path(with: FakeSetaregaan.make(bars: 40)))
+        XCTAssertNotNil(TwoHandsPath.entry.songFile)
+        XCTAssertNil(entries[2].songFile, "Greensleeves is built in")
+        XCTAssertNotNil(entries[2].path(with: nil))
         XCTAssertEqual(path.step(after: path.steps[2])?.id, "2.1")
         XCTAssertNil(path.step(after: path.steps.last!))
         XCTAssertEqual(path.lesson(of: path.steps[3])?.number, 2)

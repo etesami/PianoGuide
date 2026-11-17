@@ -2,7 +2,7 @@
 
 **Read this first when starting a new session.** Keep it current: update it at the end of every work session.
 
-Last updated: 2026-11-14 (session 32: second guided path, "Greensleeves: Moving Hand")
+Last updated: 2026-11-16 (session 33: "Setaregan: Second Half" path; Setaregan notes moved out of the repo into an imported file; Steps sheet fix)
 
 ## Where we are
 
@@ -395,7 +395,48 @@ Milestones 0–2, 4 and 8 (staff view) are partly done (see the table in [PLAN.m
   list, steps 3.1 (even), 4.1 (dotted), 8.1 (refrain), and 8.1 in landscape. **Not verified:** playing it, the path's detail page by hand,
   the real piano. The staff doesn't draw dots, so a dotted quarter looks like a quarter (the eighth after it shows the rhythm).
 
+- **Fix: the Steps sheet opened at the top** (session 33, user's report: "when I want to switch from one step to another the page
+  shows up from the beginning, not from where I am"). With more than one path, the Paths sheet always opened on the list of paths
+  and then on lesson 1. Now, with a step open, it opens straight on that step's path (`PathsView` keeps a `NavigationStack` path of
+  path ids) and scrolls to the open step (`ScrollViewReader`, rows have the step id); with no step open in that path, to the next
+  step to pass. Seen in the iPad simulator with a temporary hook (removed): step 10.2 of the new path, sheet opened on that path,
+  scrolled to lesson 10 with "Open" on the step. **Not verified:** by hand on the iPad.
+
+- **Third guided path: "Setaregan: Second Half"** (session 33, user's request: the path covered only the verse; make the rest of
+  the song the same way). Built from the user's whole arrangement (bars 1–116, now imported as a file, see below), checked
+  note for note against their `.mid`. New sections: chorus 27–34, climb 35–44,
+  coming down 45–52, verse again 53–60, 27–60 joined, G position 61–70, long notes 71–78, high part 79–92 (the song plays it again
+  at 93–106), ending 107–116, 61–116 joined, second half 27–116, whole song 3–116. `SetaregaanSecondHalfPath.swift`, listed second
+  in `GuidedPath.entries`. **12 lessons, 49 steps:** 1 Meet the second half (listen 75%) · 2 Chorus · 3 The climb · 4 Coming down
+  (each: right hand wait, left hand timed 80%, low notes wait, full wait, timed 60/80%) · 5 The verse comes back · 6 Bars 27–60
+  joined (wait, 65/80%) · 7 G position (new part ladder) · 8 Long notes (wait, 70/90%) · 9 The high part (ladder) · 10 The ending
+  (wait, 70/90%) · 11 Bars 61–116 joined (wait, 65/80%) · 12 The whole song (wait, 75/90/100%). 2 new tests (78 pass); iOS simulator
+  and Catalyst build. **Not verified:** playing it. The staff has no ties: a tied note shows as one long (whole) note.
+
+- **Paths built from an imported song file** (session 33, user's request: keep Ghoghaye Setaregan, which is under copyright, out
+  of the public repo and import it by hand; made general). Core: `PathSongFile` (id, song name, hint, a check that says why a file
+  doesn't fit) and `PathEntry` (a built-in path, or one built from a song file) in `GuidedPath.swift`; `GuidedPath.entries`
+  replaces `GuidedPath.all`. `SetaregaanPiece` **no longer holds any notes**: `song(_:from:left:right:)` cuts score bars out of
+  the imported song and makes the easier versions from it (low notes = the lowest downbeat note held a bar, low note + chord =
+  downbeat + the beat-2 notes held through 3, long notes = the first note of each bar held). Check: 3/4, both hands, 116 bars.
+  Both Setaregan paths (`TwoHandsPath.entry`, `SetaregaanSecondHalfPath.entry`) share the file `ghoghaye-setaregan`.
+  App: `PathStore` keeps the copy in Application Support/PathSongs/<id>.mid, loads it at launch, builds each path once per import.
+  The Paths list shows "Needs your song file: Ghoghaye Setaregan" (orange); the path opens on an import screen (what to import,
+  **Import Song File…**, the reason if the file is wrong). A path's ⋯ menu has **Replace Song File…** and **Remove Song File…**
+  (progress kept). Before deleting the notes, every piece the paths use was compared with the file-built one from the user's
+  `.mid`: the same (up to 0.001-beat rounding); the long-notes right hand no longer stretches over ties (no path uses it there).
+  Tests use a made-up song of the same shape (`FakeSetaregaan`), 78 pass. Seen in the iPad simulator (temporary hook, removed, and
+  mouse taps): the list without the file, the import screen, a wrong file (Twinkle) refused with "It isn't in 3/4 time", the real
+  file imported, both paths open after relaunch, step 1.1 loaded from it. **Not verified:** the Files picker itself by hand.
+  **The verse notes are still in git history** (commit `0da17a0`, public repo): needs the repo made private or history rewritten.
+  The file to import: `My Drive/z-tmp/Piano/songs/Ghoghaye Setaregan.mid` (made by `ghoghaye_setaregan.py`).
+
 ## Next steps (in order)
+
+0. User to **import `Ghoghaye Setaregan.mid`** on the iPad (Paths → either Setaregan path → Import Song File…), and decide about the
+   verse notes still in the public git history (make the repo private, or rewrite history).
+0. User to try **Setaregan: Second Half** (Paths → second path) and the **Steps sheet fix**. Open questions: are the 8–14-bar parts
+   the right size, or should the climb / high part be split? Is two runs in a row of the whole song (3½ min) too much?
 
 0. User to **connect the FP-30X to PianoGuide on the iPad over Bluetooth** (Bluetooth button → "FP-30X MIDI" → green check → Done;
    other iPads' Bluetooth off). Check: keys light up the on-screen keys, wait mode advances, it reconnects after turning the piano off

@@ -1,27 +1,42 @@
 import PianoCore
 import SwiftUI
+import UniformTypeIdentifiers
 
-/// Sheet with the guided paths. With a single path it opens straight on that path's lessons.
+/// Sheet with the guided paths. With a single path it opens straight on that path's lessons. With several, it opens on
+/// the path of the step that is open (if any), so "Steps" during a step comes back to where the player is.
+/// A path built from a song file shows an import screen until the player has imported that file.
 struct PathsView: View {
     @ObservedObject var store: PathStore
     var active: PathSelection?
     var onStart: (PathStep, GuidedPath) -> Void
     @Environment(\.dismiss) private var dismiss
+    /// Ids of the paths pushed on the navigation stack.
+    @State private var shown: [String]
+
+    init(store: PathStore, active: PathSelection?, onStart: @escaping (PathStep, GuidedPath) -> Void) {
+        self.store = store
+        self.active = active
+        self.onStart = onStart
+        _shown = State(initialValue: GuidedPath.entries.count > 1 ? active.map { [$0.path.id] } ?? [] : [])
+    }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $shown) {
             Group {
-                if GuidedPath.all.count == 1, let path = GuidedPath.all.first {
-                    PathDetailView(store: store, path: path, active: active, onStart: start)
+                if GuidedPath.entries.count == 1, let entry = GuidedPath.entries.first {
+                    entryView(entry)
                 } else {
-                    List(GuidedPath.all) { path in
-                        NavigationLink {
-                            PathDetailView(store: store, path: path, active: active, onStart: start)
-                        } label: {
+                    List(GuidedPath.entries) { entry in
+                        NavigationLink(value: entry.id) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(path.title)
-                                Text("\(store.progress(of: path).passedCount(in: path)) of \(path.steps.count) steps passed")
-                                    .font(.caption).foregroundColor(.secondary)
+                                Text(entry.title)
+                                if let path = store.path(for: entry) {
+                                    Text("\(store.progress(of: path).passedCount(in: path)) of \(path.steps.count) steps passed")
+                                        .font(.caption).foregroundColor(.secondary)
+                                } else if let file = entry.songFile {
+                                    Label("Needs your song file: \(file.songName)", systemImage: "square.and.arrow.down")
+                                        .font(.caption).foregroundColor(.orange)
+                                }
                             }
                         }
                     }
@@ -29,9 +44,20 @@ struct PathsView: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: String.self) { id in
+                if let entry = GuidedPath.entries.first(where: { $0.id == id }) { entryView(entry) }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
             }
+        }
+    }
+
+    @ViewBuilder private func entryView(_ entry: PathEntry) -> some View {
+        if let path = store.path(for: entry) {
+            PathDetailView(store: store, path: path, songFile: entry.songFile, active: active, onStart: start)
+        } else if let file = entry.songFile {
+            PathSongImportView(store: store, entry: entry, file: file)
         }
     }
 
@@ -41,18 +67,75 @@ struct PathsView: View {
     }
 }
 
+/// Shown for a path whose song file hasn't been imported yet: what the path is, which file it needs, and an import button.
+struct PathSongImportView: View {
+    @ObservedObject var store: PathStore
+    let entry: PathEntry
+    let file: PathSongFile
+    @State private var showImporter = false
+    @State private var error: String?
+
+    var body: some View {
+        List {
+            Section { Text(entry.summary).font(.callout) }
+            Section {
+                Label("This path is built from your own copy of \(file.songName). The song isn't included in the app.",
+                      systemImage: "music.note")
+                Text(file.hint).font(.callout).foregroundColor(.secondary)
+                Button { showImporter = true } label: {
+                    Label("Import Song File…", systemImage: "square.and.arrow.down")
+                }
+                if let error {
+                    Label(error, systemImage: "exclamationmark.triangle.fill").foregroundColor(.orange)
+                }
+            } footer: {
+                Text("You import it once; every path that uses it opens.")
+            }
+        }
+        .navigationTitle(entry.title)
+        .pathSongImporter(isPresented: $showImporter, store: store, file: file, error: $error)
+    }
+}
+
+extension View {
+    /// The Files picker for a path's song file; puts the reason in `error` if the file can't be used.
+    func pathSongImporter(isPresented: Binding<Bool>, store: PathStore, file: PathSongFile,
+                          error problem: Binding<String?>) -> some View {
+        fileImporter(isPresented: isPresented, allowedContentTypes: [.midi]) { result in
+            switch result {
+            case .success(let url):
+                do {
+                    try store.importSong(from: url, for: file)
+                    problem.wrappedValue = nil
+                } catch {
+                    problem.wrappedValue = (error as? PathStore.ImportError)?.errorDescription
+                        ?? "\(url.lastPathComponent): " + SongLibraryView.describe(error)
+                }
+            case .failure(let failure):
+                problem.wrappedValue = failure.localizedDescription
+            }
+        }
+    }
+}
+
 /// One path: its lessons in order, each with its goal, tips and steps. Passed steps have a green check, the next one
 /// to pass a play icon, later ones a lock (they can't be opened yet). Passed steps can be played again.
 struct PathDetailView: View {
     @ObservedObject var store: PathStore
     let path: GuidedPath
+    /// The imported file the path is built from, or nil for a built-in path.
+    var songFile: PathSongFile?
     var active: PathSelection?
     var onStart: (PathStep, GuidedPath) -> Void
     @State private var confirmReset = false
+    @State private var confirmRemove = false
+    @State private var showImporter = false
+    @State private var importError: String?
 
     var body: some View {
         let progress = store.progress(of: path)
         let current = progress.current(in: path)
+        ScrollViewReader { proxy in
         List {
             Section {
                 Text(path.summary).font(.callout)
@@ -83,6 +166,7 @@ struct PathDetailView: View {
                     }
                     ForEach(lesson.steps) { step in
                         stepRow(step, progress: progress, isCurrent: step.id == current?.id)
+                            .id(step.id)
                     }
                 } header: {
                     HStack {
@@ -95,12 +179,28 @@ struct PathDetailView: View {
                 }
             }
         }
+        .onAppear {
+            // Show where the player is: the step open on the practice screen, else the next one to pass.
+            let target = active?.path.id == path.id ? active?.step.id : current?.id
+            guard let target else { return }
+            // The list needs a moment to lay out its rows before it can scroll to one.
+            DispatchQueue.main.async { proxy.scrollTo(target, anchor: .center) }
+        }
+        }
         .navigationTitle(path.title)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button(role: .destructive) { confirmReset = true } label: {
                         Label("Start Over…", systemImage: "arrow.counterclockwise")
+                    }
+                    if songFile != nil {
+                        Button { showImporter = true } label: {
+                            Label("Replace Song File…", systemImage: "square.and.arrow.down")
+                        }
+                        Button(role: .destructive) { confirmRemove = true } label: {
+                            Label("Remove Song File…", systemImage: "trash")
+                        }
                     }
                 } label: { Label("More", systemImage: "ellipsis.circle") }
             }
@@ -109,6 +209,17 @@ struct PathDetailView: View {
             Button("Start Over", role: .destructive) { store.reset(path) }
         } message: {
             Text("Every step goes back to locked, except the first.")
+        }
+        .confirmationDialog("Remove the song file?", isPresented: $confirmRemove, titleVisibility: .visible) {
+            if let songFile { Button("Remove", role: .destructive) { store.removeSong(for: songFile) } }
+        } message: {
+            Text("The paths that use it close until you import it again. Your progress is kept; the original file is not touched.")
+        }
+        .modifier(OptionalSongImporter(isPresented: $showImporter, store: store, file: songFile, error: $importError))
+        .alert("Can't use this file", isPresented: Binding(get: { importError != nil }, set: { if !$0 { importError = nil } })) {
+            Button("OK") { importError = nil }
+        } message: {
+            Text(importError ?? "")
         }
     }
 
@@ -259,5 +370,21 @@ struct PathStepBanner: View {
                 .labelStyle(.iconOnly)
         }
         .controlSize(compact ? .small : .regular)
+    }
+}
+
+/// `pathSongImporter` when there is a file to import.
+private struct OptionalSongImporter: ViewModifier {
+    @Binding var isPresented: Bool
+    let store: PathStore
+    let file: PathSongFile?
+    @Binding var error: String?
+
+    func body(content: Content) -> some View {
+        if let file {
+            content.pathSongImporter(isPresented: $isPresented, store: store, file: file, error: $error)
+        } else {
+            content
+        }
     }
 }
